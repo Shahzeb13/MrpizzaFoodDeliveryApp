@@ -1,5 +1,7 @@
-﻿/// Supabase client placeholder.
+﻿import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Shorthand accessor to the initialized Supabase client.
 ///
-/// No network code yet. This will be implemented in a later stage when
-/// Supabase is integrated.
-library;
+/// Import this instead of typing `Supabase.instance.client` everywhere:
+/// `import 'core/network/supabase_client.dart';`
+final supabase = Supabase.instance.client;
