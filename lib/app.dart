@@ -16,6 +16,7 @@ class MrPizzaApp extends StatelessWidget {
     return ProviderScope(
       child: MaterialApp.router(
         title: 'MrPizza',
+        debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
         routerConfig: router,
       ),
