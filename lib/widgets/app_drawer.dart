@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_colors.dart';
+import '../features/auth/providers/auth_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
@@ -109,7 +110,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.account_balance_wallet_rounded,
                     iconColor: Colors.blueAccent,
                     title: 'My Wallet',
-                    trailing: _buildBadge('Rs. 0.00', Colors.blue.shade50, Colors.blue.shade800),
+                    trailing: _buildBadge(
+                        'Rs. 0.00', Colors.blue.shade50, Colors.blue.shade800),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/wallet');
@@ -121,7 +123,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.stars_rounded,
                     iconColor: Colors.amber.shade800,
                     title: 'Loyalty Points',
-                    trailing: _buildBadge('120 Points', Colors.amber.shade50, Colors.amber.shade900),
+                    trailing: _buildBadge('120 Points', Colors.amber.shade50,
+                        Colors.amber.shade900),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/loyalty');
@@ -133,7 +136,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.location_on_rounded,
                     iconColor: Colors.redAccent,
                     title: 'My Addresses',
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textLight),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textLight),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/addresses');
@@ -145,7 +149,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.receipt_long_rounded,
                     iconColor: Colors.deepOrangeAccent,
                     title: 'My Orders',
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textLight),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textLight),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/my-orders');
@@ -157,7 +162,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.favorite_rounded,
                     iconColor: Colors.pinkAccent,
                     title: 'My Favourites',
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textLight),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textLight),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/favorites');
@@ -169,7 +175,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.headset_mic_rounded,
                     iconColor: Colors.teal,
                     title: 'Support Center',
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textLight),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textLight),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/support');
@@ -183,7 +190,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
                   // Offer Notifications Switch
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -195,7 +203,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                 color: Colors.purple.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.notifications_active_rounded, size: 18, color: Colors.purple),
+                              child: const Icon(
+                                  Icons.notifications_active_rounded,
+                                  size: 18,
+                                  color: Colors.purple),
                             ),
                             const SizedBox(width: 12),
                             const Text(
@@ -232,7 +243,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.person_remove_rounded,
                     iconColor: Colors.grey.shade700,
                     title: 'Req Account Deletion',
-                    trailing: const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textLight),
+                    trailing: const Icon(Icons.chevron_right_rounded,
+                        size: 18, color: AppColors.textLight),
                     onTap: () {
                       Navigator.pop(context);
                       context.push('/delete-account');
@@ -246,7 +258,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     title: 'Logout',
                     onTap: () {
                       Navigator.pop(context);
-                      context.go('/login');
+                      ref.read(authStateProvider.notifier).logout();
                     },
                   ),
 
@@ -258,9 +270,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     children: [
                       _buildSocialButton(Icons.facebook, Colors.blue),
                       const SizedBox(width: 16),
-                      _buildSocialButton(Icons.camera_alt_outlined, Colors.purple),
+                      _buildSocialButton(
+                          Icons.camera_alt_outlined, Colors.purple),
                       const SizedBox(width: 16),
-                      _buildSocialButton(Icons.video_library_outlined, Colors.black87),
+                      _buildSocialButton(
+                          Icons.video_library_outlined, Colors.black87),
                     ],
                   ),
 
@@ -272,15 +286,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.local_pizza_rounded, size: 14, color: AppColors.primary),
+                          Icon(Icons.local_pizza_rounded,
+                              size: 14, color: AppColors.primary),
                           SizedBox(width: 4),
                           Text(
                             'Powered by ',
-                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                            style: TextStyle(
+                                fontSize: 11, color: AppColors.textSecondary),
                           ),
                           Text(
                             'Mr. Pizza',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary),
                           ),
                         ],
                       ),
@@ -298,10 +317,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           }
                         },
                         child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                          padding:
+                              EdgeInsets.symmetric(vertical: 4, horizontal: 12),
                           child: Text(
                             'Version 1.1.8+18',
-                            style: TextStyle(fontSize: 10, color: AppColors.textLight),
+                            style: TextStyle(
+                                fontSize: 10, color: AppColors.textLight),
                           ),
                         ),
                       ),

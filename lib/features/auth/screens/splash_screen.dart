@@ -1,8 +1,11 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 
+/// Branded splash / app-start loading screen.
+///
+/// Shown by [AuthGate] while the initial Supabase session check runs, so an
+/// already-logged-in user is redirected straight to Home without a flash of
+/// the login screen. It holds no navigation logic of its own.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -10,7 +13,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -32,13 +36,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _controller.forward();
-
-    // Auto-navigate to /home after splash display
-    Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) {
-        context.go('/home');
-      }
-    });
   }
 
   @override
@@ -109,7 +106,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return const Center(
-                              child: Text('👨‍🍳', style: TextStyle(fontSize: 60)),
+                              child:
+                                  Text('👨‍🍳', style: TextStyle(fontSize: 60)),
                             );
                           },
                         ),
@@ -140,7 +138,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
                     // Slogan Tagline Badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 5),
                       decoration: BoxDecoration(
                         color: AppColors.accent,
                         borderRadius: BorderRadius.circular(16),
@@ -155,7 +154,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.favorite, size: 13, color: AppColors.primary),
+                          Icon(Icons.favorite,
+                              size: 13, color: AppColors.primary),
                           SizedBox(width: 6),
                           Text(
                             'Love in Every Bite',
@@ -177,7 +177,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       width: 40,
                       height: 40,
                       child: CircularProgressIndicator(
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor:
+                            const AlwaysStoppedAnimation<Color>(Colors.white),
                         strokeWidth: 3,
                       ),
                     ),

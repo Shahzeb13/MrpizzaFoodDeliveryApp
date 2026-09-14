@@ -33,4 +33,8 @@ class AuthRepository {
   }
 
   User? get currentUser => supabase.auth.currentUser;
+
+  Session? get currentSession => supabase.auth.currentSession;
+
+  Stream<AuthState> get onAuthStateChange => supabase.auth.onAuthStateChange;
 }

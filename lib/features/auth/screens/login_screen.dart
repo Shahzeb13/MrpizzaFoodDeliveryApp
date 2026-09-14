@@ -29,12 +29,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
-    ref.listen(authStateProvider, (previous, next) {
-      if (next.isAuthenticated && !next.isLoading && mounted) {
-        context.go('/home');
-      }
-    });
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -52,7 +46,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: MrPizzaLogoWidget(size: 80, showSlogan: true),
                   ),
                   const SizedBox(height: 32),
-
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -87,7 +80,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-
                         const Text(
                           'Email Address',
                           style: TextStyle(
@@ -102,15 +94,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
                             hintText: 'name@example.com',
-                            prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
+                            prefixIcon: Icon(Icons.email_outlined,
+                                color: AppColors.primary),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) return 'Email is required';
+                            if (value == null || value.trim().isEmpty)
+                              return 'Email is required';
                             return null;
                           },
                         ),
                         const SizedBox(height: 16),
-
                         const Text(
                           'Password',
                           style: TextStyle(
@@ -124,31 +117,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           controller: _passwordController,
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
-                            hintText: '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022',
-                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                            hintText:
+                                '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022',
+                            prefixIcon: const Icon(Icons.lock_outline,
+                                color: AppColors.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: AppColors.textLight,
                               ),
                               onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
+                                setState(
+                                    () => _obscurePassword = !_obscurePassword);
                               },
                             ),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Password is required';
+                            if (value == null || value.isEmpty)
+                              return 'Password is required';
                             return null;
                           },
                         ),
                         const SizedBox(height: 8),
-
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Password reset link sent to your email!')),
+                                const SnackBar(
+                                    content: Text(
+                                        'Password reset link sent to your email!')),
                               );
                             },
                             child: const Text(
@@ -161,17 +161,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         ),
-
                         if (authState.errorMessage != null) ...[
                           const SizedBox(height: 8),
                           Text(
                             authState.errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 12),
                           ),
                         ],
-
                         const SizedBox(height: 16),
-
                         SizedBox(
                           width: double.infinity,
                           height: 52,
@@ -180,7 +178,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ? null
                                 : () async {
                                     FocusScope.of(context).unfocus();
-                                    if (!_formKey.currentState!.validate()) return;
+                                    if (!_formKey.currentState!.validate())
+                                      return;
                                     ref.read(authStateProvider.notifier).login(
                                           _emailController.text,
                                           _passwordController.text,
@@ -190,26 +189,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Text(
                                     'Sign In',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
                                   ),
                           ),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
                         "Don't have an account?",
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 14),
                       ),
                       TextButton(
                         onPressed: () => context.go('/signup'),

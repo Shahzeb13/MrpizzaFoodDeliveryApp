@@ -46,10 +46,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   }
 
   bool _passwordRuleLength() => _passwordController.text.length >= 8;
-  bool _passwordRuleUppercase() => _passwordController.text.contains(RegExp(r'[A-Z]'));
-  bool _passwordRuleLowercase() => _passwordController.text.contains(RegExp(r'[a-z]'));
-  bool _passwordRuleNumber() => _passwordController.text.contains(RegExp(r'[0-9]'));
-  bool _passwordRuleSpecial() => _passwordController.text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-+=\[\]\\;~`]'));
+  bool _passwordRuleUppercase() =>
+      _passwordController.text.contains(RegExp(r'[A-Z]'));
+  bool _passwordRuleLowercase() =>
+      _passwordController.text.contains(RegExp(r'[a-z]'));
+  bool _passwordRuleNumber() =>
+      _passwordController.text.contains(RegExp(r'[0-9]'));
+  bool _passwordRuleSpecial() => _passwordController.text
+      .contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-+=\[\]\\;~`]'));
 
   List<({bool met, String label})> get _passwordRules => [
         (met: _passwordRuleLength(), label: 'At least 8 characters'),
@@ -94,18 +98,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
-    ref.listen(authStateProvider, (previous, next) {
-      if (next.isAuthenticated && !next.isLoading && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Welcome to Mr. Pizza!'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
-        context.go('/home');
-      }
-    });
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -130,7 +122,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     child: MrPizzaLogoWidget(size: 70, showSlogan: true),
                   ),
                   const SizedBox(height: 24),
-
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -169,7 +160,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         // Full Name
                         const Text(
                           'Full Name',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -180,11 +172,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           decoration: const InputDecoration(
                             hintText: 'e.g. Alex Morgan',
                             counterText: '',
-                            prefixIcon: Icon(Icons.person_outline, color: AppColors.primary),
+                            prefixIcon: Icon(Icons.person_outline,
+                                color: AppColors.primary),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) return 'Full name is required';
-                            if (value.trim().length > 100) return 'Name must be 100 characters or less';
+                            if (value == null || value.trim().isEmpty)
+                              return 'Full name is required';
+                            if (value.trim().length > 100)
+                              return 'Name must be 100 characters or less';
                             return null;
                           },
                         ),
@@ -193,7 +188,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         // Email Address
                         const Text(
                           'Email Address',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -202,7 +198,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           autocorrect: false,
                           decoration: const InputDecoration(
                             hintText: 'name@example.com',
-                            prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
+                            prefixIcon: Icon(Icons.email_outlined,
+                                color: AppColors.primary),
                           ),
                           validator: _validateEmail,
                         ),
@@ -211,7 +208,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         // Phone Number
                         const Text(
                           'Phone Number',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -219,7 +217,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           keyboardType: TextInputType.phone,
                           decoration: const InputDecoration(
                             hintText: '+1 (555) 000-1122',
-                            prefixIcon: Icon(Icons.phone_outlined, color: AppColors.primary),
+                            prefixIcon: Icon(Icons.phone_outlined,
+                                color: AppColors.primary),
                           ),
                           validator: _validatePhone,
                         ),
@@ -228,7 +227,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         // Password
                         const Text(
                           'Password',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -236,17 +236,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           obscureText: _obscurePassword,
                           decoration: InputDecoration(
                             hintText: 'At least 8 characters',
-                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                            prefixIcon: const Icon(Icons.lock_outline,
+                                color: AppColors.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: AppColors.textLight,
                               ),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
                             ),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'Password is required';
+                            if (value == null || value.isEmpty)
+                              return 'Password is required';
                             if (!_passwordRules.every((r) => r.met)) {
                               return 'Password does not meet all requirements';
                             }
@@ -262,17 +267,25 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             child: Row(
                               children: [
                                 Icon(
-                                  rule.met ? Icons.check_circle : Icons.circle_outlined,
+                                  rule.met
+                                      ? Icons.check_circle
+                                      : Icons.circle_outlined,
                                   size: 14,
-                                  color: rule.met ? AppColors.success : AppColors.textLight,
+                                  color: rule.met
+                                      ? AppColors.success
+                                      : AppColors.textLight,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   rule.label,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: rule.met ? AppColors.success : AppColors.textSecondary,
-                                    fontWeight: rule.met ? FontWeight.w600 : FontWeight.normal,
+                                    color: rule.met
+                                        ? AppColors.success
+                                        : AppColors.textSecondary,
+                                    fontWeight: rule.met
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ],
@@ -284,7 +297,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         // Confirm Password
                         const Text(
                           'Confirm Password',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -292,14 +306,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           obscureText: _obscureConfirmPassword,
                           decoration: InputDecoration(
                             hintText: 'Re-enter your password',
-                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                            prefixIcon: const Icon(Icons.lock_outline,
+                                color: AppColors.primary),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                _obscureConfirmPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
                                 color: AppColors.textLight,
                               ),
-                              onPressed: () =>
-                                  setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                              onPressed: () => setState(() =>
+                                  _obscureConfirmPassword =
+                                      !_obscureConfirmPassword),
                             ),
                           ),
                           validator: _validateConfirmPassword,
@@ -309,7 +327,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         if (authState.errorMessage != null) ...[
                           Text(
                             authState.errorMessage!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 12),
                           ),
                           const SizedBox(height: 8),
                         ],
@@ -324,26 +343,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Text(
                                     'Create Account',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold),
                                   ),
                           ),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
                         'Already have an account?',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 14),
                       ),
                       TextButton(
                         onPressed: () => context.go('/login'),
