@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,12 +14,26 @@ class SignupScreen extends ConsumerStatefulWidget {
 }
 
 class _SignupScreenState extends ConsumerState<SignupScreen> {
+  static final RegExp _emailRegExp =
+      RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+
+  static final RegExp _phoneRegExp = RegExp(r'^\+?\d{7,15}$');
+
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   bool _obscurePassword = true;
-  bool _acceptTerms = true;
+  bool _obscureConfirmPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -26,12 +41,70 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  bool _passwordRuleLength() => _passwordController.text.length >= 8;
+  bool _passwordRuleUppercase() => _passwordController.text.contains(RegExp(r'[A-Z]'));
+  bool _passwordRuleLowercase() => _passwordController.text.contains(RegExp(r'[a-z]'));
+  bool _passwordRuleNumber() => _passwordController.text.contains(RegExp(r'[0-9]'));
+  bool _passwordRuleSpecial() => _passwordController.text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-+=\[\]\\;~`]'));
+
+  List<({bool met, String label})> get _passwordRules => [
+        (met: _passwordRuleLength(), label: 'At least 8 characters'),
+        (met: _passwordRuleUppercase(), label: 'At least 1 uppercase letter'),
+        (met: _passwordRuleLowercase(), label: 'At least 1 lowercase letter'),
+        (met: _passwordRuleNumber(), label: 'At least 1 number'),
+        (met: _passwordRuleSpecial(), label: 'At least 1 special character'),
+      ];
+
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty) return 'Email is required';
+    if (!_emailRegExp.hasMatch(email)) return 'Enter a valid email address';
+    return null;
+  }
+
+  String? _validatePhone(String? value) {
+    final phone = value?.trim() ?? '';
+    if (phone.isEmpty) return 'Phone number is required';
+    if (!_phoneRegExp.hasMatch(phone)) return 'Enter a valid phone number';
+    return null;
+  }
+
+  String? _validateConfirmPassword(String? value) {
+    if (value != _passwordController.text) return 'Passwords do not match';
+    return null;
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+
+    ref.read(authStateProvider.notifier).signup(
+          name: _nameController.text,
+          email: _emailController.text,
+          phone: _phoneController.text,
+          password: _passwordController.text,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
+
+    ref.listen(authStateProvider, (previous, next) {
+      if (next.isAuthenticated && !next.isLoading && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Welcome to Mr. Pizza!'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+        context.go('/home');
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -48,238 +121,245 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header Logo
-                const Center(
-                  child: MrPizzaLogoWidget(size: 70, showSlogan: true),
-                ),
-                const SizedBox(height: 24),
-
-                // Form Container
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(
+                    child: MrPizzaLogoWidget(size: 70, showSlogan: true),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Create Account',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              '🎁 +100 PTS',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Join Mr. Pizza VIP Rewards & Order Fresh Italian Pizzas',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                      // Full Name
-                      const Text(
-                        'Full Name',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. Alex Morgan',
-                          prefixIcon: Icon(Icons.person_outline, color: AppColors.primary),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Email Address
-                      const Text(
-                        'Email Address',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          hintText: 'name@example.com',
-                          prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Phone Number
-                      const Text(
-                        'Phone Number',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          hintText: '+1 (555) 000-1122',
-                          prefixIcon: Icon(Icons.phone_outlined, color: AppColors.primary),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Password
-                      const Text(
-                        'Password',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          hintText: 'At least 6 characters',
-                          prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: AppColors.textLight,
-                            ),
-                            onPressed: () {
-                              setState(() => _obscurePassword = !_obscurePassword);
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Terms checkbox
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _acceptTerms,
-                            activeColor: AppColors.primary,
-                            onChanged: (val) {
-                              if (val != null) setState(() => _acceptTerms = val);
-                            },
-                          ),
-                          const Expanded(
-                            child: Text(
-                              'I agree to Mr. Pizza Terms of Service & Privacy Policy',
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      if (authState.errorMessage != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          authState.errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
                         ),
                       ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Join Mr. Pizza to order fresh Italian pizzas.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
 
-                      const SizedBox(height: 16),
+                        // Full Name
+                        const Text(
+                          'Full Name',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _nameController,
+                          textCapitalization: TextCapitalization.words,
+                          maxLength: 100,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. Alex Morgan',
+                            counterText: '',
+                            prefixIcon: Icon(Icons.person_outline, color: AppColors.primary),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) return 'Full name is required';
+                            if (value.trim().length > 100) return 'Name must be 100 characters or less';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
 
-                      // Submit Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: ElevatedButton(
-                          onPressed: (authState.isLoading || !_acceptTerms)
-                              ? null
-                              : () async {
-                                  final success = await ref.read(authStateProvider.notifier).signup(
-                                        name: _nameController.text,
-                                        email: _emailController.text,
-                                        phone: _phoneController.text,
-                                        password: _passwordController.text,
-                                      );
-                                  if (success && mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('🎉 Welcome to Mr. Pizza! 100 VIP Bonus Points added!'),
-                                        backgroundColor: AppColors.primary,
-                                      ),
-                                    );
-                                    context.go('/home');
-                                  }
-                                },
-                          child: authState.isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : const Text(
-                                  'Create VIP Account',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        // Email Address
+                        const Text(
+                          'Email Address',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          decoration: const InputDecoration(
+                            hintText: 'name@example.com',
+                            prefixIcon: Icon(Icons.email_outlined, color: AppColors.primary),
+                          ),
+                          validator: _validateEmail,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Phone Number
+                        const Text(
+                          'Phone Number',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            hintText: '+1 (555) 000-1122',
+                            prefixIcon: Icon(Icons.phone_outlined, color: AppColors.primary),
+                          ),
+                          validator: _validatePhone,
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Password
+                        const Text(
+                          'Password',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            hintText: 'At least 8 characters',
+                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                color: AppColors.textLight,
+                              ),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) return 'Password is required';
+                            if (!_passwordRules.every((r) => r.met)) {
+                              return 'Password does not meet all requirements';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Real-time password strength checklist
+                        ..._passwordRules.map(
+                          (rule) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  rule.met ? Icons.check_circle : Icons.circle_outlined,
+                                  size: 14,
+                                  color: rule.met ? AppColors.success : AppColors.textLight,
                                 ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  rule.label,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: rule.met ? AppColors.success : AppColors.textSecondary,
+                                    fontWeight: rule.met ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Confirm Password
+                        const Text(
+                          'Confirm Password',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _confirmPasswordController,
+                          obscureText: _obscureConfirmPassword,
+                          decoration: InputDecoration(
+                            hintText: 'Re-enter your password',
+                            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                color: AppColors.textLight,
+                              ),
+                              onPressed: () =>
+                                  setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                            ),
+                          ),
+                          validator: _validateConfirmPassword,
+                        ),
+                        const SizedBox(height: 12),
+
+                        if (authState.errorMessage != null) ...[
+                          Text(
+                            authState.errorMessage!,
+                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+
+                        // Submit Button
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: authState.isLoading ? null : _submit,
+                            child: authState.isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const Text(
+                                    'Create Account',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Already have an account?',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/login'),
+                        child: const Text(
+                          'Sign In',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Sign In Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Already have an account?',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        context.go('/login');
-                      },
-                      child: const Text(
-                        'Sign In',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

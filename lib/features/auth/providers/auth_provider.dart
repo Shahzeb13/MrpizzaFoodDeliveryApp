@@ -1,29 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/user.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../data/auth_repository.dart';
 
 class AuthState {
   final bool isAuthenticated;
-  final UserModel? user;
+  final User? user;
   final bool isLoading;
   final String? errorMessage;
 
   const AuthState({
-    this.isAuthenticated = true, // Default to demo logged-in user
-    this.user = const UserModel(
-      id: 'usr_101',
-      name: 'Alex Morgan',
-      email: 'alex.morgan@mrpizza.com',
-      phone: '+1 (555) 234-5678',
-      vipPoints: 450,
-      role: 'customer',
-    ),
+    this.isAuthenticated = false,
+    this.user,
     this.isLoading = false,
     this.errorMessage,
   });
 
   AuthState copyWith({
     bool? isAuthenticated,
-    UserModel? user,
+    User? user,
     bool? isLoading,
     String? errorMessage,
   }) {
@@ -37,31 +32,28 @@ class AuthState {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState());
+  final AuthRepository _repo;
+
+  AuthNotifier(this._repo) : super(const AuthState()) {
+    final user = _repo.currentUser;
+    if (user != null) {
+      state = AuthState(isAuthenticated: true, user: user);
+    }
+  }
 
   Future<bool> login(String email, String password) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    if (email.trim().isEmpty || password.isEmpty) {
-      state = state.copyWith(isLoading: false, errorMessage: 'Please fill in all fields.');
+    try {
+      final res = await _repo.signIn(email: email.trim(), password: password);
+      state = AuthState(isAuthenticated: true, user: res.user);
+      return true;
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: 'Something went wrong. Please try again.');
       return false;
     }
-
-    final user = UserModel(
-      id: 'usr_101',
-      name: email.contains('@') ? email.split('@')[0].toUpperCase() : 'Valued Guest',
-      email: email.trim(),
-      phone: '+1 (555) 987-6543',
-      vipPoints: 500,
-    );
-
-    state = state.copyWith(
-      isAuthenticated: true,
-      user: user,
-      isLoading: false,
-    );
-    return true;
   }
 
   Future<bool> signup({
@@ -71,38 +63,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
   }) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      final res = await _repo.signUp(email: email.trim(), password: password);
+      final user = res.user;
+      if (user == null) {
+        state = state.copyWith(isLoading: false, errorMessage: 'Signup failed. Please try again.');
+        return false;
+      }
 
-    if (name.trim().isEmpty || email.trim().isEmpty || password.isEmpty) {
-      state = state.copyWith(isLoading: false, errorMessage: 'Please complete all required fields.');
+      try {
+        await _repo.insertProfile(userId: user.id, fullName: name.trim(), phone: phone.trim());
+      } catch (e) {
+        await _repo.signOut();
+        state = state.copyWith(isLoading: false, errorMessage: 'Failed to create profile. Please try again.');
+        return false;
+      }
+
+      state = AuthState(isAuthenticated: true, user: user);
+      return true;
+    } on AuthException catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: e.message);
+      return false;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, errorMessage: 'Something went wrong. Please try again.');
       return false;
     }
-
-    final newUser = UserModel(
-      id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim().isEmpty ? '+1 (555) 000-1122' : phone.trim(),
-      vipPoints: 100, // Welcome bonus points!
-    );
-
-    state = state.copyWith(
-      isAuthenticated: true,
-      user: newUser,
-      isLoading: false,
-    );
-    return true;
   }
 
   void logout() {
-    state = const AuthState(
-      isAuthenticated: false,
-      user: null,
-      isLoading: false,
-    );
+    _repo.signOut();
+    state = const AuthState();
   }
 }
 
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier();
+  return AuthNotifier(AuthRepository());
 });
