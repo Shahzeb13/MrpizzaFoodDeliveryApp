@@ -42,84 +42,22 @@ final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>(
 // Cart State
 class CartState {
   final List<CartItem> items;
-  final String? promoCode;
-  final double discountPercentage;
-  final double deliveryFee;
-  final double taxRate;
 
-  const CartState({
-    required this.items,
-    this.promoCode,
-    this.discountPercentage = 0.0,
-    this.deliveryFee = 2.99,
-    this.taxRate = 0.08,
-  });
+  const CartState({required this.items});
+
+  bool get isEmpty => items.isEmpty;
 
   int get totalItemCount => items.fold(0, (sum, item) => sum + item.quantity);
 
   double get subtotal => items.fold(0.0, (sum, item) => sum + item.totalPrice);
 
-  double get discountAmount => subtotal * discountPercentage;
-
-  double get taxAmount => (subtotal - discountAmount) * taxRate;
-
-  double get grandTotal {
-    if (items.isEmpty) return 0.0;
-    return (subtotal - discountAmount) + taxAmount + deliveryFee;
-  }
-
-  CartState copyWith({
-    List<CartItem>? items,
-    String? promoCode,
-    double? discountPercentage,
-    double? deliveryFee,
-    double? taxRate,
-  }) {
-    return CartState(
-      items: items ?? this.items,
-      promoCode: promoCode ?? this.promoCode,
-      discountPercentage: discountPercentage ?? this.discountPercentage,
-      deliveryFee: deliveryFee ?? this.deliveryFee,
-      taxRate: taxRate ?? this.taxRate,
-    );
+  CartState copyWith({List<CartItem>? items}) {
+    return CartState(items: items ?? this.items);
   }
 }
 
 class CartNotifier extends StateNotifier<CartState> {
-  CartNotifier()
-      : super(
-          CartState(
-            items: [
-              CartItem(
-                id: 'cart_demo_1',
-                item: MenuRepository.mockMenuItems.firstWhere(
-                  (i) => i.id == 'classic_2',
-                  orElse: () => MenuRepository.mockMenuItems.first,
-                ),
-                size: PizzaSize.medium,
-                crust: PizzaCrust.cheeseBurst,
-                selectedToppings: [
-                  MenuRepository.defaultToppings[0],
-                  MenuRepository.defaultToppings[2],
-                ],
-                quantity: 1,
-              ),
-              CartItem(
-                id: 'cart_demo_2',
-                item: MenuRepository.mockMenuItems.firstWhere(
-                  (i) => i.id == 'side_1',
-                  orElse: () => MenuRepository.mockMenuItems.last,
-                ),
-                size: PizzaSize.small,
-                crust: PizzaCrust.thin,
-                selectedToppings: [],
-                quantity: 2,
-              ),
-            ],
-            promoCode: 'MRPIZZA50',
-            discountPercentage: 0.20,
-          ),
-        );
+  CartNotifier() : super(const CartState(items: []));
 
   void addItem({
     required MenuItem item,
@@ -176,33 +114,8 @@ class CartNotifier extends StateNotifier<CartState> {
     );
   }
 
-  bool applyPromoCode(String code) {
-    final cleaned = code.trim().toUpperCase();
-    if (cleaned == 'MRPIZZA50' || cleaned == 'WELCOME50') {
-      state = state.copyWith(
-        promoCode: cleaned,
-        discountPercentage: 0.50, // 50% discount
-      );
-      return true;
-    } else if (cleaned == 'PIZZA20') {
-      state = state.copyWith(
-        promoCode: cleaned,
-        discountPercentage: 0.20,
-      );
-      return true;
-    }
-    return false;
-  }
-
-  void removePromoCode() {
-    state = state.copyWith(
-      promoCode: null,
-      discountPercentage: 0.0,
-    );
-  }
-
   void clearCart() {
-    state = state.copyWith(items: []);
+    state = const CartState(items: []);
   }
 }
 

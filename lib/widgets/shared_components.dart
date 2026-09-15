@@ -645,7 +645,7 @@ class CartFloatingBar extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                'Rs. ${cart.grandTotal.toInt()}',
+                'Rs. ${cart.subtotal.toInt()}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
