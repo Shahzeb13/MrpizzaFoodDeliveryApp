@@ -78,3 +78,7 @@ Express Checkout  OR  Atoms  OR  React Native  OR  Cardinal
 
 - [ ] Does Express Checkout's Tracker-creation call return a ready-to-use checkout **URL**, or does the client need to initialize a checkout session using the tracker/JWT some other way? (Check the official Express Checkout guide page directly.)
 - [ ] Confirm whether card-on-file / saved cards is an actual requirement for this project — if not, Express Checkout is sufficient; if separate capture is needed later, would need to move to Atoms (web-only) or Cardinal (native).
+
+
+
+also created safepay sandbox account ! and also learned that you gotta apply for produciton acocunt relatively early becasue it takes fucking time
