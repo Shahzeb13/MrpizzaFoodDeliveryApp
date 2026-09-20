@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_theme.dart';
+import '../core/theme/widgets.dart';
 import '../features/auth/providers/auth_provider.dart';
+import '../features/profile/providers/profile_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});
@@ -15,84 +18,122 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   bool _offerNotifications = true;
   int _versionTapCount = 0;
 
+  /// Live profile data for the drawer header — never hardcoded.
+  String get _displayName {
+    final profile = ref.watch(profileFutureProvider).value;
+    final email = ref.watch(authStateProvider).user?.email ?? '';
+    final fullName = profile?.fullName.trim() ?? '';
+    if (fullName.isNotEmpty) return fullName;
+    if (email.trim().isNotEmpty) return email.split('@').first;
+    return 'Guest';
+  }
+
+  String get _avatarLetter {
+    final name = _displayName.trim();
+    if (name.isEmpty) return '?';
+    return name[0].toUpperCase();
+  }
+
+  String get _phone {
+    final phone = ref.watch(profileFutureProvider).value?.phone ?? '';
+    return phone.trim().isEmpty ? 'No phone added' : phone.trim();
+  }
+
+  void _push(String path) {
+    Navigator.pop(context);
+    context.push(path);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       width: MediaQuery.of(context).size.width * 0.80,
       child: SafeArea(
         child: Column(
           children: [
-            // User Header Profile Section (Upgraded Modern Card Design)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withOpacity(0.06),
-                    Colors.white,
-                  ],
+                  colors: [AppColors.sand, AppColors.surface],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primary, AppColors.primaryDark],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                  const MrEyebrow(text: 'Delivering to'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.surface,
+                          border: Border.all(
+                              color: AppColors.borderDeep, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadowSoft,
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'A',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Aalyan Mughal',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.2,
+                        child: CircleAvatar(
+                          backgroundColor: AppColors.primary,
+                          child: Text(
+                            _avatarLetter,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        const Text(
-                          '+923316290108',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _displayName,
+                              style: const TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                const Icon(Icons.phone_rounded,
+                                    size: 12, color: AppColors.textLight),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _phone,
+                                  style: const TextStyle(
+                                    fontFamily: AppTheme.fontFamily,
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -100,119 +141,69 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
             const Divider(height: 1, color: AppColors.border),
 
-            // Scrollable Tighter Menu List
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 children: [
-                  // My Wallet
                   _buildDrawerTile(
                     icon: Icons.account_balance_wallet_rounded,
-                    iconColor: Colors.blueAccent,
                     title: 'My Wallet',
-                    trailing: _buildBadge(
-                        'Rs. 0.00', Colors.blue.shade50, Colors.blue.shade800),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/wallet');
-                    },
+                    trailing: _buildBadge('Rs. 0.00'),
+                    onTap: () => _push('/wallet'),
                   ),
-
-                  // Loyalty Points
                   _buildDrawerTile(
                     icon: Icons.stars_rounded,
-                    iconColor: Colors.amber.shade800,
                     title: 'Loyalty Points',
-                    trailing: _buildBadge('120 Points', Colors.amber.shade50,
-                        Colors.amber.shade900),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/loyalty');
-                    },
+                    trailing: _buildBadge('120 Points'),
+                    onTap: () => _push('/loyalty'),
                   ),
-
-                  // My Addresses
                   _buildDrawerTile(
                     icon: Icons.location_on_rounded,
-                    iconColor: Colors.redAccent,
                     title: 'My Addresses',
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textLight),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/addresses');
-                    },
+                    onTap: () => _push('/addresses'),
                   ),
-
-                  // My Orders
                   _buildDrawerTile(
                     icon: Icons.receipt_long_rounded,
-                    iconColor: Colors.deepOrangeAccent,
                     title: 'My Orders',
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textLight),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/my-orders');
-                    },
+                    onTap: () => _push('/my-orders'),
                   ),
-
-                  // My Favourites
                   _buildDrawerTile(
                     icon: Icons.favorite_rounded,
-                    iconColor: Colors.pinkAccent,
                     title: 'My Favourites',
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textLight),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/favorites');
-                    },
+                    onTap: () => _push('/favorites'),
                   ),
-
-                  // Support Center
                   _buildDrawerTile(
                     icon: Icons.headset_mic_rounded,
-                    iconColor: Colors.teal,
                     title: 'Support Center',
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textLight),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/support');
-                    },
+                    onTap: () => _push('/support'),
                   ),
 
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: Divider(height: 1, color: AppColors.border),
                   ),
 
-                  // Offer Notifications Switch
                   Padding(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
+                        const Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(7),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                  Icons.notifications_active_rounded,
-                                  size: 18,
-                                  color: Colors.purple),
+                            MrIconWell(
+                              icon: Icons.notifications_active_rounded,
+                              size: 18,
+                              color: AppColors.textPrimary,
+                              background: AppColors.sand,
                             ),
-                            const SizedBox(width: 12),
-                            const Text(
+                            SizedBox(width: 12),
+                            Text(
                               'Offer Notifications',
                               style: TextStyle(
-                                fontSize: 13,
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.textPrimary,
                               ),
@@ -223,7 +214,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           scale: 0.8,
                           child: Switch(
                             value: _offerNotifications,
-                            activeColor: AppColors.primary,
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: AppColors.primary,
                             onChanged: (val) {
                               setState(() => _offerNotifications = val);
                             },
@@ -234,28 +226,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   ),
 
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: Divider(height: 1, color: AppColors.border),
                   ),
 
-                  // Req Account Deletion
                   _buildDrawerTile(
                     icon: Icons.person_remove_rounded,
-                    iconColor: Colors.grey.shade700,
                     title: 'Req Account Deletion',
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        size: 18, color: AppColors.textLight),
-                    onTap: () {
-                      Navigator.pop(context);
-                      context.push('/delete-account');
-                    },
+                    onTap: () => _push('/delete-account'),
                   ),
-
-                  // Logout
                   _buildDrawerTile(
                     icon: Icons.logout_rounded,
-                    iconColor: Colors.red,
                     title: 'Logout',
+                    distant: true,
                     onTap: () {
                       Navigator.pop(context);
                       ref.read(authStateProvider.notifier).logout();
@@ -264,41 +248,49 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
                   const SizedBox(height: 16),
 
-                  // Social Icons Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildSocialButton(Icons.facebook, Colors.blue),
-                      const SizedBox(width: 16),
-                      _buildSocialButton(
-                          Icons.camera_alt_outlined, Colors.purple),
-                      const SizedBox(width: 16),
-                      _buildSocialButton(
-                          Icons.video_library_outlined, Colors.black87),
-                    ],
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    child: MrFadeDivider(),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Footer Powered By & Secret Triple-Tap Version
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildSocialButton(Icons.facebook, Colors.white),
+                      const SizedBox(width: 14),
+                      _buildSocialButton(
+                          Icons.camera_alt_outlined, Colors.white),
+                      const SizedBox(width: 14),
+                      _buildSocialButton(
+                          Icons.video_library_outlined, Colors.white),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
                   Column(
                     children: [
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.local_pizza_rounded,
-                              size: 14, color: AppColors.primary),
+                              size: 14, color: AppColors.accent),
                           SizedBox(width: 4),
                           Text(
                             'Powered by ',
                             style: TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary),
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 11,
+                                color: AppColors.textSecondary),
                           ),
                           Text(
                             'Mr. Pizza',
                             style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
                                 fontSize: 11,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w800,
                                 color: AppColors.textPrimary),
                           ),
                         ],
@@ -317,12 +309,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           }
                         },
                         child: const Padding(
-                          padding:
-                              EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                          padding: EdgeInsets.symmetric(
+                              vertical: 4, horizontal: 12),
                           child: Text(
                             'Version 1.1.8+18',
                             style: TextStyle(
-                                fontSize: 10, color: AppColors.textLight),
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 10,
+                                color: AppColors.textLight),
                           ),
                         ),
                       ),
@@ -340,49 +334,52 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   Widget _buildDrawerTile({
     required IconData icon,
-    required Color iconColor,
     required String title,
     Widget? trailing,
     required VoidCallback onTap,
+    bool distant = false,
   }) {
     return ListTile(
       onTap: onTap,
       dense: true,
       visualDensity: VisualDensity.compact,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-      leading: Container(
-        padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, size: 18, color: iconColor),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      leading: MrIconWell(
+        icon: icon,
+        size: 18,
+        color: distant ? AppColors.primary : AppColors.textPrimary,
+        background: distant ? AppColors.primaryTint : AppColors.sand,
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
+          fontFamily: AppTheme.fontFamily,
           fontSize: 13.5,
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: distant ? AppColors.primary : AppColors.textPrimary,
         ),
       ),
-      trailing: trailing,
+      trailing: trailing ??
+          const Icon(Icons.chevron_right_rounded,
+              size: 18, color: AppColors.textLight),
     );
   }
 
-  Widget _buildBadge(String label, Color bgColor, Color textColor) {
+  Widget _buildBadge(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.goldTint,
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: textColor,
+        style: const TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
+          color: Color(0xFF9A6B1F),
         ),
       ),
     );
@@ -390,12 +387,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   Widget _buildSocialButton(IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+      width: 38,
+      height: 38,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceDark,
         shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
-      child: Icon(icon, size: 18, color: color),
+      child: Icon(icon, size: 17, color: color),
     );
   }
 }

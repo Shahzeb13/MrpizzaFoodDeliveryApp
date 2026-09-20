@@ -55,6 +55,12 @@ class AuthNotifier extends StateNotifier<AuthStateModel> {
     });
   }
 
+  @override
+  void dispose() {
+    _authSubscription.cancel();
+    super.dispose();
+  }
+
   void _applySession(Session? session) {
     state = state.copyWith(
       isInitializing: false,

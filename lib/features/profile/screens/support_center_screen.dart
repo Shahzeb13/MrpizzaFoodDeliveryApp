@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 
 class SupportCenterScreen extends StatefulWidget {
   const SupportCenterScreen({super.key});
@@ -12,19 +13,23 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
   final List<Map<String, String>> faqs = [
     {
       'question': 'How long does pizza delivery take?',
-      'answer': 'We deliver hot & fresh pizza within 30 to 45 minutes of order placement.',
+      'answer':
+          'We deliver hot & fresh pizza within 30 to 45 minutes of order placement.',
     },
     {
       'question': 'What are the delivery charges?',
-      'answer': 'Free delivery on orders above Rs. 1000! Standard delivery charge is Rs. 99.',
+      'answer':
+          'Free delivery on orders above Rs. 1000! Standard delivery charge is Rs. 99.',
     },
     {
       'question': 'Can I track my order live?',
-      'answer': 'Yes! You can track your order status in real-time under "My Orders" -> "Track Order".',
+      'answer':
+          'Yes! You can track your order status in real-time under "My Orders" -> "Track Order".',
     },
     {
       'question': 'What payment methods are supported?',
-      'answer': 'We support Cash on Delivery (COD), Credit/Debit Card, and Mr. Pizza Wallet.',
+      'answer':
+          'We support Cash on Delivery (COD), Credit/Debit Card, and Mr. Pizza Wallet.',
     },
   ];
 
@@ -39,16 +44,12 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Support Center 🎧',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('Support Center'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -65,10 +66,12 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
                     icon: Icons.phone_in_talk_rounded,
                     title: 'Call Us',
                     subtitle: '+92 331 6290108',
-                    color: Colors.green,
+                    color: AppColors.success,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Calling Mr. Pizza Helpline...'), behavior: SnackBarBehavior.floating),
+                        const SnackBar(
+                            content:
+                                Text('Calling Mr. Pizza Helpline...')),
                       );
                     },
                   ),
@@ -79,67 +82,67 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
                     icon: Icons.chat_rounded,
                     title: 'WhatsApp Chat',
                     subtitle: '24/7 Available',
-                    color: Colors.blue,
+                    color: AppColors.primary,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Opening WhatsApp Support...'), behavior: SnackBarBehavior.floating),
+                        const SnackBar(
+                            content:
+                                Text('Opening WhatsApp Support...')),
                       );
                     },
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            // FAQs Section
-            const Text(
-              'Frequently Asked Questions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            const MrSectionTitle(
+              title: 'Frequently Asked Questions',
+              eyebrow: 'Help',
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            ...faqs.map((faq) => Container(
+            ...faqs.map((faq) => MrCard(
                   margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: ExpansionTile(
-                    title: Text(
-                      faq['question']!,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                  padding: EdgeInsets.zero,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
                     ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                        child: Text(
-                          faq['answer']!,
-                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.3),
-                        ),
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                      title: Text(
+                        faq['question']!,
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
-                    ],
+                      iconColor: AppColors.primary,
+                      collapsedIconColor: AppColors.textLight,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            faq['answer']!,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            // Contact Form
-            Container(
+            const MrSectionTitle(title: 'Send Us a Message'),
+            const SizedBox(height: 14),
+            MrCard(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
-              ),
+              borderRadius: BorderRadius.circular(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Send Us a Message',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 10),
                   TextField(
                     controller: messageController,
                     maxLines: 3,
@@ -157,19 +160,14 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
                           messageController.clear();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Support ticket submitted! We will contact you shortly.'),
-                              backgroundColor: Colors.green,
-                              behavior: SnackBarBehavior.floating,
+                              content: Text(
+                                  'Support ticket submitted! We will contact you shortly.'),
+                              backgroundColor: AppColors.success,
                             ),
                           );
                         }
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: const Text('Submit Ticket', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text('Submit Ticket'),
                     ),
                   ),
                 ],
@@ -188,38 +186,29 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return MrCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+      child: Column(
+        children: [
+          MrIconWell(
+            icon: icon,
+            color: color,
+            background: color.withValues(alpha: 0.12),
+            size: 24,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ],
       ),
     );
   }

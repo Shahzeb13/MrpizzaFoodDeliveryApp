@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 
 class AccountDeletionScreen extends StatefulWidget {
   const AccountDeletionScreen({super.key});
@@ -24,22 +25,32 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24)),
           title: const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
-              SizedBox(width: 8),
-              Text('Delete Account?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              MrIconWell(
+                icon: Icons.warning_amber_rounded,
+                color: Color(0xFFB3261E),
+                background: Color(0x1FB3261E),
+                size: 24,
+              ),
+              SizedBox(width: 10),
+              Text('Delete Account?',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             ],
           ),
           content: const Text(
             'Are you sure you want to permanently delete your Mr. Pizza account? All your wallet balance and loyalty points will be permanently erased.',
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.3),
+            style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.4),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold)),
+              child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () {
@@ -47,17 +58,17 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
                 context.go('/login');
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Account deletion request submitted. Logging out...'),
-                    backgroundColor: Colors.red,
-                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                        'Account deletion request submitted. Logging out...'),
+                    backgroundColor: Color(0xFFB3261E),
                   ),
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                backgroundColor: const Color(0xFFB3261E),
+                foregroundColor: Colors.white,
               ),
-              child: const Text('Confirm Deletion', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Confirm Deletion'),
             ),
           ],
         );
@@ -68,16 +79,12 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Request Account Deletion',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('Request Account Deletion'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -87,29 +94,37 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Warning Banner
-            Container(
+            MrCard(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
+              borderRadius: BorderRadius.circular(18),
+              color: const Color(0x14B3261E),
               child: Row(
-                children: const [
-                  Icon(Icons.report_problem_rounded, color: Colors.red, size: 28),
-                  SizedBox(width: 14),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const MrIconWell(
+                    icon: Icons.report_problem_rounded,
+                    color: Color(0xFFB3261E),
+                    background: Color(0x22B3261E),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Permanent Action Warning',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(color: const Color(0xFFB3261E)),
                         ),
-                        SizedBox(height: 4),
+                        const SizedBox(height: 4),
                         Text(
                           'Deleting your account is permanent. Saved addresses, order history, loyalty points, and wallet funds will be erased.',
-                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.3),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                    height: 1.35,
+                                  ),
                         ),
                       ],
                     ),
@@ -117,38 +132,45 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            const Text(
+            Text(
               'Please tell us why you are leaving:',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
 
-            ...reasons.map((reason) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selectedReason == reason ? AppColors.primary : AppColors.border,
-                    ),
-                  ),
-                  child: RadioListTile<String>(
-                    title: Text(
-                      reason,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
-                    ),
-                    value: reason,
-                    groupValue: selectedReason,
-                    activeColor: AppColors.primary,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => selectedReason = val);
-                      }
-                    },
-                  ),
-                )),
+            RadioGroup<String>(
+              groupValue: selectedReason,
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => selectedReason = val);
+                }
+              },
+              child: Column(
+                children: reasons
+                    .map((reason) => MrCard(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: EdgeInsets.zero,
+                          borderRadius: BorderRadius.circular(14),
+                          child: RadioListTile<String>(
+                            title: Text(
+                              reason,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            value: reason,
+                            activeColor: AppColors.primary,
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ),
 
             const SizedBox(height: 24),
 
@@ -156,15 +178,17 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _confirmAccountDeletion,
-                icon: const Icon(Icons.delete_forever_rounded, color: Colors.white),
+                icon: const Icon(Icons.delete_forever_rounded,
+                    color: Colors.white),
                 label: const Text(
                   'Delete My Account',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: const Color(0xFFB3261E),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ),

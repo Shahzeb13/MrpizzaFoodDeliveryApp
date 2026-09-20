@@ -3,6 +3,20 @@
 ## Project Overview
 MrPizza is a Flutter food delivery app for a real restaurant ("Mr. Pizza", Abbottabad + Mansehra branches, Pakistan). Single codebase shared by customers and delivery riders, with role-based access. Backend: Supabase. Payments: Safepay (+ EasyPaisa/JazzCash via Raast).
 
+## ⚠️ Supabase Safety Rule — READ FIRST
+**Never perform a write operation against Supabase (via MCP, CLI, or any tool) without first explicitly asking for and receiving my permission — no exceptions.**
+
+This includes but is not limited to:
+- INSERT, UPDATE, DELETE, or any SQL that mutates data
+- Creating, altering, or dropping tables/columns
+- Generating OR applying database migrations
+- Deploying or modifying Edge Functions
+- Changing RLS policies, auth settings, storage buckets, or any project configuration
+
+**Read-only operations are fine without asking** — querying data, inspecting schema, listing tables, reading Edge Function source code.
+
+If a task seems to require a write operation, stop and describe exactly what you intend to run (the SQL, the migration, the deploy) and wait for my explicit go-ahead before executing it. Assume every Supabase-facing action is destructive until proven otherwise — this project handles real customer orders and real payment data for a live restaurant.
+
 ## Tech Stack
 - Flutter (state management: Provider)
 - Supabase (auth, database, storage, Edge Functions)

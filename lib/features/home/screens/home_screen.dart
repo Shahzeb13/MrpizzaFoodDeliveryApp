@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
 import '../../menu/data/menu_repository.dart';
@@ -20,7 +21,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       drawer: AppDrawer(),
       body: HomeFeedView(),
     );
@@ -144,14 +145,16 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
     final locationState = ref.watch(locationProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       drawer: const AppDrawer(),
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.surface,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded,
+                color: AppColors.textPrimary, size: 26),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
@@ -159,7 +162,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
             ? Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.sand,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: TextField(
@@ -170,7 +173,8 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                   },
                   decoration: const InputDecoration(
                     hintText: 'Search pizzas, burgers...',
-                    prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textSecondary),
+                    prefixIcon: Icon(Icons.search,
+                        size: 18, color: AppColors.textSecondary),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -191,10 +195,17 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Deliver To',
-                          style: TextStyle(fontSize: 11, color: Colors.white70),
+                          'DELIVER TO',
+                          style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                            color: AppColors.accent,
+                          ),
                         ),
-                        Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.white70),
+                        Icon(Icons.keyboard_arrow_down,
+                            size: 14, color: AppColors.textSecondary),
                       ],
                     ),
                     Text(
@@ -202,9 +213,11 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],
@@ -212,7 +225,11 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
               ),
         actions: [
           IconButton(
-            icon: Icon(_isSearching ? Icons.close : Icons.search, color: Colors.white, size: 24),
+            icon: Icon(
+              _isSearching ? Icons.close : Icons.search_rounded,
+              color: AppColors.textPrimary,
+              size: 23,
+            ),
             onPressed: () {
               setState(() {
                 _isSearching = !_isSearching;
@@ -227,7 +244,10 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            color: Colors.white,
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -235,7 +255,12 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.primary,
               indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              labelStyle: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w800,
+                fontSize: 13.5,
+                letterSpacing: -0.2,
+              ),
               tabs: ItemCategory.values.map((cat) => Tab(text: cat.label)).toList(),
             ),
           ),
@@ -248,96 +273,113 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
             slivers: [
               // Hero Pizza Banner Image with Mr. Pizza Logo & Brand Overlay
               SliverToBoxAdapter(
-                child: Container(
-                  height: 185,
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: Stack(
-                    children: [
-                      // Food Banner Background Image
-                      Image.asset(
-                        'assets/images/banner_deal.jpg',
-                        width: double.infinity,
-                        height: 185,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 185,
-                            color: AppColors.primaryDark,
-                          );
-                        },
-                      ),
-
-                      // Gradient Shadow Overlay
-                      Container(
-                        width: double.infinity,
-                        height: 185,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.black.withOpacity(0.75),
-                              Colors.black.withOpacity(0.30),
-                              Colors.transparent,
-                            ],
-                            begin: Alignment.bottomLeft,
-                            end: Alignment.topRight,
-                          ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+                  child: Container(
+                    height: 178,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadow,
+                          blurRadius: 18,
+                          offset: Offset(0, 8),
                         ),
-                      ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: Stack(
+                        children: [
+                          // Food Banner Background Image
+                          Image.asset(
+                            'assets/images/banner_deal.jpg',
+                            width: double.infinity,
+                            height: 178,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 178,
+                                color: AppColors.primaryDark,
+                              );
+                            },
+                          ),
 
-                      // Mr. Pizza Logo & Brand Info Overlaid on Pizza Banner
-                      Positioned(
-                        left: 16,
-                        bottom: 16,
-                        right: 16,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Official Chef Mascot Logo Badge
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                border: Border.all(color: AppColors.accent, width: 2),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 8,
-                                    offset: Offset(0, 3),
-                                  ),
+                          // Warm Scrim Gradient Overlay
+                          Container(
+                            width: double.infinity,
+                            height: 178,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.bannerScrim,
+                                  AppColors.bannerScrim,
+                                  Colors.transparent,
                                 ],
-                              ),
-                              child: ClipOval(
-                                child: Image.asset(
-                                  'assets/images/logo.png',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Text('👨‍🍳', style: TextStyle(fontSize: 32)),
-                                    );
-                                  },
-                                ),
+                                begin: Alignment.bottomLeft,
+                                end: Alignment.topRight,
                               ),
                             ),
-                            const SizedBox(width: 14),
+                          ),
 
-                            // Brand Name & Slogan Badge
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Row(
-                                    children: const [
-                                      Text(
+                          // Mr. Pizza Logo & Brand Info Overlaid on Pizza Banner
+                          Positioned(
+                            left: 18,
+                            bottom: 16,
+                            right: 18,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Official Chef Mascot Logo Badge
+                                Container(
+                                  width: 66,
+                                  height: 66,
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    border: Border.all(
+                                        color: AppColors.accent, width: 2),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 10,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/images/logo.png',
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Center(
+                                          child: Text('👨‍🍳',
+                                              style: TextStyle(fontSize: 30)),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+
+                                // Brand Name & Slogan Badge
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text(
                                         'Mr. Pizza',
                                         style: TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.w900,
+                                          fontFamily: AppTheme.fontFamily,
+                                          fontSize: 27,
+                                          fontWeight: FontWeight.w800,
                                           color: Colors.white,
-                                          letterSpacing: -0.5,
+                                          letterSpacing: -0.8,
+                                          height: 1.05,
                                           shadows: [
                                             Shadow(
                                               color: Colors.black45,
@@ -347,41 +389,44 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                                           ],
                                         ),
                                       ),
-                                      SizedBox(width: 6),
-                                      Text('🍕', style: TextStyle(fontSize: 20)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-
-                                  Row(
-                                    children: const [
-                                      Icon(Icons.favorite, size: 12, color: AppColors.primary),
-                                      SizedBox(width: 5),
-                                      Text(
-                                        'Love in Every Bite',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white70,
-                                          letterSpacing: 0.3,
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 9, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.goldTint,
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: const Text(
+                                          'LOVE IN EVERY BITE',
+                                          style: TextStyle(
+                                            fontFamily: AppTheme.fontFamily,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                            color: Color(0xFF7A5414),
+                                            letterSpacing: 1.6,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
 
               // Categorized Food Sections with HD Category Hero Feature Cards
               ...ItemCategory.values.expand((cat) {
-                final categoryItems = MenuRepository.mockMenuItems.where((item) {
+                final allItems = ref.watch(menuFutureProvider).value ??
+                    MenuRepository.mockMenuItems;
+                final categoryItems = allItems.where((item) {
                   final matchesCat = item.category == cat;
                   final matchesQuery = searchQuery.isEmpty ||
                       item.title.toLowerCase().contains(searchQuery);
@@ -447,7 +492,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
             bottom: 0,
             child: CartFloatingBar(
               onTap: () {
-                context.go('/checkout');
+                context.push('/checkout');
               },
             ),
           ),

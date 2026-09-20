@@ -12,8 +12,8 @@ class MrPizzaApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ProviderScope(
-      child: const AuthGate(),
+    return const ProviderScope(
+      child: AuthGate(),
     );
   }
 }

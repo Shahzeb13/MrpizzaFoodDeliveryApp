@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/widgets.dart';
 import '../../menu/providers/menu_provider.dart';
 import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
@@ -71,9 +74,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) {
         final selectedId = ref.read(checkoutProvider).address?.id;
@@ -83,21 +86,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                margin: const EdgeInsets.only(top: 8, bottom: 6),
-                width: 36,
-                height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
+                width: 44,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppColors.borderDeep,
+                  borderRadius: BorderRadius.circular(999),
                 ),
+                alignment: Alignment.center,
               ),
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Text(
                   'Select Delivery Address',
                   style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                     color: AppColors.textPrimary,
                   ),
                 ),
@@ -119,26 +125,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(14),
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: isSelected ? AppColors.primary : AppColors.border,
                               width: isSelected ? 1.5 : 1,
                             ),
+                            boxShadow: isSelected
+                                ? null
+                                : const [
+                                    BoxShadow(
+                                      color: AppColors.shadowSoft,
+                                      blurRadius: 10,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.location_on_rounded,
-                                  color: AppColors.primary,
-                                  size: 18,
-                                ),
+                              MrIconWell(
+                                icon: Icons.location_on_rounded,
+                                size: 18,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary,
+                                background: isSelected
+                                    ? AppColors.primaryTint
+                                    : AppColors.sand,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -148,7 +161,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                     Text(
                                       address.label,
                                       style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
+                                        fontFamily: AppTheme.fontFamily,
+                                        fontWeight: FontWeight.w800,
                                         fontSize: 14,
                                         color: AppColors.textPrimary,
                                       ),
@@ -166,7 +180,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               ),
                               if (isSelected)
                                 const Icon(
-                                  Icons.check_circle,
+                                  Icons.check_circle_rounded,
                                   color: AppColors.primary,
                                   size: 20,
                                 ),
@@ -228,10 +242,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isPlacingOrder = false);
-      _showMessage(
-        'Failed to place order. Please try again.',
-        isError: true,
-      );
+      _showMessage(_orderErrorText(e), isError: true);
       return;
     }
 
@@ -253,6 +264,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  /// Translates low-level order-insert failures into actionable messages so
+  /// the user sees WHY an order failed instead of a generic retry note.
+  String _orderErrorText(Object error) {
+    if (error is PostgrestException) {
+      final code = error.code ?? '';
+      final message = error.message.toLowerCase();
+      if (code == '23503' ||
+          message.contains('foreign key') ||
+          message.contains('menu_item')) {
+        return 'A cart item is no longer on the menu. '
+            'Please remove it and place the order again.';
+      }
+      if (code == '23505' || message.contains('duplicate key')) {
+        return 'This order was already placed. Please review your cart.';
+      }
+      if (code == '23514' || message.contains('check constraint')) {
+        return 'Some order details are invalid. Please review and try again.';
+      }
+      return 'Failed to place order: ${error.message}';
+    }
+    return 'Failed to place order. Please check your connection and try again.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
@@ -266,16 +300,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
         title: const Text(
           'Your Cart & Checkout',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
         ),
         actions: [
           if (cart.items.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.white),
+              icon: const Icon(Icons.delete_outline,
+                  color: AppColors.textPrimary),
               onPressed: () {
                 ref.read(cartProvider.notifier).clearCart();
               },
@@ -291,31 +333,71 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.local_pizza_rounded,
-            size: 64,
-            color: AppColors.textLight,
+          Container(
+            width: 88,
+            height: 88,
+            decoration: const BoxDecoration(
+              color: AppColors.sand,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.local_pizza_rounded,
+              size: 40,
+              color: AppColors.textSecondary,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           const Text(
             'Your Cart is Empty',
             style: TextStyle(
+              fontFamily: AppTheme.fontFamily,
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
               color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 8),
           const Text(
             'Explore our menu and add your favorite pizzas!',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(
+              fontFamily: AppTheme.fontFamily,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              context.go('/home');
-            },
-            child: const Text('Explore Menu'),
+          SizedBox(
+            height: 50,
+            width: 200,
+            child: FilledButton(
+              onPressed: () {
+                context.go('/home');
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 6,
+                shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Explore Menu',
+                    style: TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Icon(Icons.arrow_forward_rounded, size: 16),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -357,56 +439,62 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Order Items',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        MrSectionTitle(
+          title: 'Order Items',
+          trailing: Text(
+            'Rs. ${cart.subtotal.toInt()}',
+            style: const TextStyle(
+              fontFamily: AppTheme.fontFamily,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primary,
             ),
-            Text(
-              'Subtotal: Rs. ${cart.subtotal.toInt()}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-              ),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 6),
+        const MrFadeDivider(),
+        const SizedBox(height: 14),
         ...cart.items.map((cartItem) {
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.shadowSoft,
+                  blurRadius: 14,
+                  offset: Offset(0, 6),
+                ),
+              ],
             ),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    cartItem.item.imageUrl,
-                    width: 62,
-                    height: 62,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 62,
-                        height: 62,
-                        color: AppColors.background,
-                        child: const Center(
-                          child: Icon(
-                            Icons.local_pizza_rounded,
-                            color: AppColors.textLight,
-                            size: 28,
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.sand,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.all(5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(11),
+                    child: Image.network(
+                      cartItem.item.imageUrl,
+                      width: 58,
+                      height: 58,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 58,
+                          height: 58,
+                          color: AppColors.sand,
+                          child: const Center(
+                            child: Text('🍕', style: TextStyle(fontSize: 26)),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -421,8 +509,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             child: Text(
                               cartItem.item.title,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                                fontFamily: AppTheme.fontFamily,
+                                fontWeight: FontWeight.w800,
                                 fontSize: 14,
+                                letterSpacing: -0.2,
                               ),
                             ),
                           ),
@@ -430,7 +520,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             icon: const Icon(
                               Icons.delete_outline_rounded,
                               size: 20,
-                              color: Colors.redAccent,
+                              color: AppColors.textLight,
                             ),
                             visualDensity: VisualDensity.compact,
                             padding: EdgeInsets.zero,
@@ -447,6 +537,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       Text(
                         '${cartItem.size.name} • ${cartItem.crust.name}',
                         style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
                           fontSize: 12,
                           color: AppColors.textSecondary,
                         ),
@@ -455,6 +546,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         Text(
                           'Toppings: ${cartItem.selectedToppings.map((t) => t.name).join(', ')}',
                           style: const TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             fontSize: 11,
                             color: AppColors.primaryDark,
                           ),
@@ -463,6 +555,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       Text(
                         'Rs. ${cartItem.totalPrice.toInt()}',
                         style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
                           fontWeight: FontWeight.w900,
                           color: AppColors.primary,
                           fontSize: 14,
@@ -474,9 +567,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 const SizedBox(width: 8),
                 Container(
                   decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.sand,
+                    borderRadius: BorderRadius.circular(999),
                   ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(
                     children: [
                       IconButton(
@@ -490,7 +584,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                       Text(
                         '${cartItem.quantity}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.add, size: 16),
@@ -516,23 +613,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Delivery or Pickup',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
+        const MrSectionTitle(title: 'Delivery or Pickup'),
+        const SizedBox(height: 6),
+        const MrFadeDivider(),
+        const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
           child: SegmentedButton<OrderType>(
             segments: const [
               ButtonSegment(
                 value: OrderType.delivery,
-                label: Text('Delivery'),
+                label: Text(
+                  'Delivery',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 icon: Icon(Icons.delivery_dining_rounded, size: 18),
               ),
               ButtonSegment(
                 value: OrderType.pickup,
-                label: Text('Pickup'),
+                label: Text(
+                  'Pickup',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 icon: Icon(Icons.storefront_rounded, size: 18),
               ),
             ],
@@ -545,7 +653,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               backgroundColor: WidgetStateProperty.resolveWith(
                 (states) => states.contains(WidgetState.selected)
                     ? AppColors.primary
-                    : Colors.white,
+                    : AppColors.surface,
               ),
               foregroundColor: WidgetStateProperty.resolveWith(
                 (states) => states.contains(WidgetState.selected)
@@ -553,10 +661,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     : AppColors.textSecondary,
               ),
               side: const WidgetStatePropertyAll(
-                BorderSide(color: AppColors.border),
+                BorderSide(color: AppColors.borderDeep),
               ),
               textStyle: const WidgetStatePropertyAll(
-                TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
               ),
               iconColor: WidgetStateProperty.resolveWith(
                 (states) => states.contains(WidgetState.selected)
@@ -607,24 +715,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _deliveryAddressCard(List<UserAddress> addresses, CheckoutState checkout) {
     final address = checkout.address ?? addresses.firstWhere((a) => a.isDefault, orElse: () => addresses.first);
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       onTap: () => _showAddressPicker(addresses),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadowSoft,
+              blurRadius: 14,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.location_on, color: AppColors.primary),
+            const MrIconWell(
+              icon: Icons.location_on_rounded,
+              color: AppColors.primary,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -633,12 +743,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 children: [
                   Text(
                     address.label,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     address.addressLine,
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -646,9 +764,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             const Text(
               'Change',
               style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
                 color: AppColors.primary,
                 fontSize: 13,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const Icon(Icons.chevron_right, color: AppColors.textLight),
@@ -664,20 +783,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        color: AppColors.primaryTint,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
-          const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 18),
+          const MrIconWell(
+            icon: Icons.storefront_rounded,
+            size: 18,
+            color: AppColors.primary,
+            background: AppColors.surface,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Delivering from ${branch.name} (nearest branch)',
               style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
                 fontSize: 13,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
               ),
             ),
@@ -692,9 +816,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,7 +836,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Expanded(
                 child: Text(
                   'No saved addresses yet. Add one to place a delivery order.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ),
             ],
@@ -746,63 +880,80 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             );
           }
           return Column(
-            children: branches.map((branch) {
-              final isSelected = checkout.branch?.id == branch.id;
-              return InkWell(
-                onTap: () {
-                  ref.read(checkoutProvider.notifier).selectBranch(branch);
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.primary.withOpacity(0.05)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.border,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
+                children: branches.map((branch) {
+                  final isSelected = checkout.branch?.id == branch.id;
+                  return InkWell(
+                    onTap: () {
+                      ref.read(checkoutProvider.notifier).selectBranch(branch);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primaryTint
+                            : AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
                           color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textLight,
+                              ? AppColors.primaryLight
+                              : AppColors.border,
+                          width: isSelected ? 1.5 : 1,
                         ),
-                        const SizedBox(width: 12),
-                        Icon(
-                          isSelected
-                              ? Icons.storefront_rounded
-                              : Icons.storefront_outlined,
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            branch.name,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w600,
+                        boxShadow: isSelected
+                            ? null
+                            : const [
+                                BoxShadow(
+                                  color: AppColors.shadowSoft,
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textLight,
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            MrIconWell(
+                              icon: isSelected
+                                  ? Icons.storefront_rounded
+                                  : Icons.storefront_outlined,
+                              size: 18,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                              background: isSelected
+                                  ? AppColors.surface
+                                  : AppColors.sand,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                branch.name,
+                                style: TextStyle(
+                                  fontFamily: AppTheme.fontFamily,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }).toList(),
               );
-            }).toList(),
-          );
         },
       ),
     ];
@@ -811,7 +962,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontFamily: AppTheme.fontFamily,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
+      ),
     );
   }
 
@@ -820,9 +976,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: const Center(
         child: CircularProgressIndicator(color: AppColors.primary),
@@ -835,15 +997,25 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         children: [
           const Text(
             'Could not load data',
-            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+            style: TextStyle(
+              fontFamily: AppTheme.fontFamily,
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
           ),
           const SizedBox(height: 10),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -859,17 +1031,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Order Summary',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
+        const MrSectionTitle(title: 'Order Summary'),
+        const SizedBox(height: 6),
+        const MrFadeDivider(),
+        const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: AppColors.shadowSoft,
+                blurRadius: 14,
+                offset: Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -884,19 +1061,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'Delivery Charge',
                 'Rs. ${totals.deliveryFee.toInt()}',
               ),
-              const Divider(height: 24),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: MrFadeDivider(),
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Total Amount',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                   Text(
                     'Rs. ${totals.total.toInt()}',
                     style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
                       color: AppColors.primary,
                     ),
                   ),
@@ -926,18 +1113,68 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final canPlace = !_isPlacingOrder && checkout.branch != null;
     return SizedBox(
       width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
+      height: 58,
+      child: FilledButton(
         onPressed: canPlace
-            ? () => _confirmOrder(cart: ref.read(cartProvider), checkout: checkout)
+            ? () => _confirmOrder(
+                cart: ref.read(cartProvider), checkout: checkout)
             : checkout.branch == null
-                ? () => _showMessage(checkout.isDelivery ? 'Select a delivery address first.' : 'Select a pickup branch first.')
+                ? () => _showMessage(checkout.isDelivery
+                    ? 'Select a delivery address first.'
+                    : 'Select a pickup branch first.')
                 : null,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 8,
+          shadowColor: AppColors.primary.withValues(alpha: 0.45),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
         child: _isPlacingOrder
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text(
-                'Confirm Order • Rs. ${totals.total.toInt()}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(color: Colors.white),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Confirm Order',
+                    style: TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: AppColors.primary,
+                      size: 15,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Rs. ${totals.total.toInt()}',
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
               ),
       ),
     );

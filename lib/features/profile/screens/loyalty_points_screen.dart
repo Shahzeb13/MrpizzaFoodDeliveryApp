@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 
 class LoyaltyPointsScreen extends StatefulWidget {
   const LoyaltyPointsScreen({super.key});
@@ -16,100 +17,81 @@ class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
       'title': 'Free 500ml Cold Drink',
       'points': 100,
       'icon': Icons.local_drink_rounded,
-      'color': Colors.amber,
+      'color': AppColors.accent,
     },
     {
       'title': 'Free Garlic Bread Sticks',
       'points': 250,
       'icon': Icons.bakery_dining_rounded,
-      'color': Colors.orange,
+      'color': AppColors.warning,
     },
     {
       'title': 'Rs. 300 Off Voucher',
       'points': 500,
       'icon': Icons.confirmation_number_rounded,
-      'color': Colors.deepOrange,
+      'color': AppColors.primary,
     },
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Loyalty Points',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('Loyalty Points'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Points Header Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Colors.amber, Colors.deepOrange],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
+            MrDoubleBezel(
+              radius: 26,
+              innerColor: AppColors.surfaceDark,
               child: Column(
                 children: [
-                  const Icon(Icons.stars_rounded, color: Colors.white, size: 48),
-                  const SizedBox(height: 8),
+                  const MrIconWell(
+                    icon: Icons.stars_rounded,
+                    color: AppColors.accent,
+                    background: Color(0x22E3A63B),
+                    size: 30,
+                  ),
+                  const SizedBox(height: 10),
                   Text(
                     '$points',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.displayMedium
+                        ?.copyWith(color: Colors.white),
                   ),
-                  const Text(
+                  const SizedBox(height: 2),
+                  Text(
                     'Available Pizza Points',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: AppColors.textLight),
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Earn 1 Point for every Rs. 10 spent',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
+                  const SizedBox(height: 14),
+                  const MrEyebrow(
+                    text: 'Earn 1 point on every Rs. 10',
+                    background: Color(0x2EFFFFFF),
+                    foreground: AppColors.accent,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
-            const Text(
-              'Redeem Rewards',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            const MrSectionTitle(
+              title: 'Redeem Rewards',
+              eyebrow: 'Perks',
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             ListView.builder(
               shrinkWrap: true,
@@ -118,24 +100,22 @@ class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
               itemBuilder: (context, index) {
                 final item = rewards[index];
                 final canRedeem = points >= (item['points'] as int);
+                final color = item['color'] as Color;
 
-                return Container(
+                return MrCard(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
+                  borderRadius: BorderRadius.circular(18),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: (item['color'] as Color).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
+                          color: color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 26),
+                        child: Icon(
+                            item['icon'] as IconData, color: color, size: 26),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -144,47 +124,35 @@ class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
                           children: [
                             Text(
                               item['title'] as String,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '${item['points']} Points Required',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
                         ),
                       ),
-                      ElevatedButton(
-                        onPressed: canRedeem
-                            ? () {
-                                setState(() {
-                                  points -= item['points'] as int;
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Redeemed ${item['title']}! 🎉'),
-                                    backgroundColor: Colors.green,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          disabledBackgroundColor: Colors.grey.shade200,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: Text(
-                          canRedeem ? 'Redeem' : 'Locked',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: canRedeem ? Colors.white : Colors.grey,
-                          ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: canRedeem
+                              ? () {
+                                  setState(() {
+                                    points -= item['points'] as int;
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Redeemed ${item['title']}!'),
+                                      backgroundColor: AppColors.success,
+                                    ),
+                                  );
+                                }
+                              : null,
+                          child: Text(canRedeem ? 'Redeem' : 'Locked'),
                         ),
                       ),
                     ],

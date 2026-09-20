@@ -8,12 +8,24 @@ final selectedCategoryProvider = StateProvider<ItemCategory?>((ref) => null);
 // Search Query Provider
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
+// Repository + live menu catalog (Supabase `menu_items` with mock fallback).
+final menuRepositoryProvider =
+    Provider<MenuRepository>((ref) => MenuRepository());
+
+/// The full menu catalog. Waiting/error states surface the bundled mock
+/// catalog so screens always have items to render.
+final menuFutureProvider = FutureProvider<List<MenuItem>>((ref) {
+  return ref.watch(menuRepositoryProvider).fetchMenuItems();
+});
+
 // Filtered Menu Items Provider
 final filteredMenuItemsProvider = Provider<List<MenuItem>>((ref) {
   final category = ref.watch(selectedCategoryProvider);
   final query = ref.watch(searchQueryProvider).trim().toLowerCase();
+  final items =
+      ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
 
-  return MenuRepository.mockMenuItems.where((item) {
+  return items.where((item) {
     final matchesCategory = category == null || item.category == category;
     final matchesQuery = query.isEmpty ||
         item.title.toLowerCase().contains(query) ||
@@ -24,7 +36,7 @@ final filteredMenuItemsProvider = Provider<List<MenuItem>>((ref) {
 
 // Favorite Items Provider
 class FavoritesNotifier extends StateNotifier<Set<String>> {
-  FavoritesNotifier() : super({'sig_1', 'clas_1', 'des_1'});
+  FavoritesNotifier() : super(<String>{});
 
   void toggleFavorite(String itemId) {
     if (state.contains(itemId)) {

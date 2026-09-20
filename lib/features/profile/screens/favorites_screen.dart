@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
 import '../../menu/data/menu_repository.dart';
 import '../../menu/models/menu_item.dart';
@@ -14,46 +15,47 @@ class FavoritesScreen extends ConsumerStatefulWidget {
 }
 
 class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
-  // Sample favorite items list from repository
-  late List<MenuItem> favoriteItems;
-
-  @override
-  void initState() {
-    super.initState();
-    favoriteItems = MenuRepository.mockMenuItems.take(4).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
+    final favoriteIds = ref.watch(favoritesProvider);
+    final menu =
+        ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
+    final favoriteItems =
+        menu.where((item) => favoriteIds.contains(item.id)).toList();
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'My Favourites ❤️',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('My Favourites'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: favoriteItems.isEmpty
-          ? Center(
+          ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.favorite_border_rounded, size: 64, color: AppColors.textLight),
+                children: [
+                  MrIconWell(
+                    icon: Icons.favorite_border_rounded,
+                    color: AppColors.textSecondary,
+                    background: AppColors.sand,
+                    size: 28,
+                  ),
                   SizedBox(height: 12),
                   Text(
                     'No Favourites Saved',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary),
                   ),
                   SizedBox(height: 4),
                   Text(
                     'Tap the heart icon on any pizza to save it here.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -63,28 +65,28 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               itemCount: favoriteItems.length,
               itemBuilder: (context, index) {
                 final item = favoriteItems[index];
-                return Container(
+                return MrCard(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
+                  borderRadius: BorderRadius.circular(18),
                   child: Row(
                     children: [
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                         child: Image.network(
                           item.imageUrl,
                           width: 76,
                           height: 76,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
                             width: 76,
                             height: 76,
-                            color: AppColors.background,
-                            child: const Center(child: Text('🍕', style: TextStyle(fontSize: 28))),
+                            color: AppColors.sand,
+                            child: const Center(
+                              child: Icon(Icons.local_pizza_rounded,
+                                  size: 28, color: AppColors.textLight),
+                            ),
                           ),
                         ),
                       ),
@@ -95,36 +97,35 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                           children: [
                             Text(
                               item.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleSmall,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
                               item.category.label,
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Rs. ${item.basePrice.toInt()}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
-                            ),
+                            const SizedBox(height: 8),
+                            MrPriceText(item.basePrice, fontSize: 15),
                           ],
                         ),
                       ),
                       Column(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.favorite_rounded, color: Colors.red, size: 22),
+                            icon: const Icon(Icons.favorite_rounded,
+                                color: AppColors.primary, size: 22),
                             onPressed: () {
-                              setState(() {
-                                favoriteItems.removeAt(index);
-                              });
+                              ref
+                                  .read(favoritesProvider.notifier)
+                                  .toggleFavorite(item.id);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Removed from favourites'),
                                   duration: Duration(seconds: 1),
-                                  behavior: SnackBarBehavior.floating,
                                 ),
                               );
                             },
@@ -138,14 +139,15 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                                     toppings: [],
                                     quantity: 1,
                                   );
-                              showTopCartToast(context, 'Added ${item.title} to cart!');
+                              showTopCartToast(
+                                  context, 'Added ${item.title} to cart!');
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(0, 38),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16),
                             ),
-                            child: const Text('Add', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+                            child: const Text('Add'),
                           ),
                         ],
                       ),

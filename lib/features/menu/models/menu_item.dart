@@ -10,6 +10,36 @@ enum ItemCategory {
 
   final String label;
   const ItemCategory(this.label);
+
+  /// Maps a DB `category` value (enum name or label, any casing) to a
+  /// category. Unknown values fall back to [classics] so rows stay visible.
+  static ItemCategory fromDb(Object? value) {
+    if (value == null) return ItemCategory.classics;
+    final s = value.toString().trim().toLowerCase();
+    for (final c in ItemCategory.values) {
+      if (c.name == s || c.label.toLowerCase() == s) return c;
+    }
+    const aliases = <String, ItemCategory>{
+      'classic': ItemCategory.classics,
+      'flaming classic': ItemCategory.classics,
+      'special': ItemCategory.specials,
+      'flaming special': ItemCategory.specials,
+      'burger': ItemCategory.burgers,
+      'shawarma': ItemCategory.shawarmas,
+      'dessert': ItemCategory.desserts,
+      'deal': ItemCategory.deals,
+      'offer': ItemCategory.deals,
+      'offers': ItemCategory.deals,
+      'deals & offers': ItemCategory.deals,
+      'side': ItemCategory.sides,
+      'starter': ItemCategory.sides,
+      'starters': ItemCategory.sides,
+      'sides & starters': ItemCategory.sides,
+      'drink': ItemCategory.drinks,
+      'beverage': ItemCategory.drinks,
+    };
+    return aliases[s] ?? ItemCategory.classics;
+  }
 }
 
 enum PizzaSize {
@@ -91,6 +121,49 @@ class MenuItem {
     this.isBestseller = false,
     this.availableToppings = const [],
   });
+
+  /// Builds a MenuItem from a Supabase `menu_items` row. Column spellings are
+  /// resolved tolerantly (title/name, base_price/price, image_url/image, …)
+  /// so the mapping keeps working as the table evolves.
+  factory MenuItem.fromMap(Map<String, dynamic> map) {
+    return MenuItem(
+      id: _asString(map['id'] ?? map['menu_item_id']),
+      title: _asString(map['title'] ?? map['name'], fallback: 'Unnamed item'),
+      description: _asString(map['description'] ?? map['desc']),
+      basePrice: _asDouble(map['base_price'] ?? map['price'] ?? 0),
+      originalPrice: map['original_price'] == null
+          ? null
+          : _asDouble(map['original_price']),
+      imageUrl: _asString(
+        map['image_url'] ?? map['image'] ?? map['imageurl'],
+      ),
+      category: ItemCategory.fromDb(map['category']),
+      rating: _asDouble(map['rating'] ?? 4.8),
+      reviewCount: _asInt(map['review_count'] ?? map['reviews'] ?? 120),
+      prepTime: _asString(map['prep_time'], fallback: '15-20 min'),
+      calories: _asInt(map['calories'] ?? 450),
+      isVeg: map['is_veg'] == true,
+      isSpicy: map['is_spicy'] == true,
+      isBestseller:
+          map['is_bestseller'] == true || map['is_best_seller'] == true,
+    );
+  }
+}
+
+String _asString(Object? value, {String fallback = ''}) {
+  final s = value?.toString().trim() ?? '';
+  return s.isEmpty ? fallback : s;
+}
+
+double _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+int _asInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class CartItem {

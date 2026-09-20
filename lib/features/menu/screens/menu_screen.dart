@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
 import '../models/menu_item.dart';
@@ -49,25 +50,36 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
     final filteredItems = ref.watch(filteredMenuItemsProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       drawer: const AppDrawer(),
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.surface,
         elevation: 0,
+        scrolledUnderElevation: 0,
         leading: Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu, color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded,
+                color: AppColors.textPrimary, size: 26),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
         title: const Text(
-          'Mr. Pizza Menu 🍕',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          'Full Menu',
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w800,
+            fontSize: 17,
+            letterSpacing: -0.3,
+          ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
         actions: [
           IconButton(
-            icon: Icon(_isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded, color: Colors.white),
+            icon: Icon(
+              _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+              color: AppColors.textPrimary,
+            ),
             onPressed: () {
               setState(() => _isGridView = !_isGridView);
             },
@@ -77,7 +89,10 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
-            color: Colors.white,
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
+            ),
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -85,7 +100,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.primary,
               indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              labelStyle: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w800,
+                fontSize: 13.5,
+                letterSpacing: -0.2,
+              ),
               tabs: [
                 const Tab(text: 'All Items'),
                 ...ItemCategory.values.map((cat) => Tab(text: cat.label)),
@@ -97,7 +117,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
       body: Stack(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.only(top: 12),
             child: _isGridView
                 ? GridView.builder(
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -106,6 +126,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 16,
                     ),
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
                     itemCount: filteredItems.length,
                     itemBuilder: (context, index) {
                       final item = filteredItems[index];
@@ -124,7 +145,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
                   )
                 : ListView.builder(
                     itemCount: filteredItems.length,
-                    padding: const EdgeInsets.only(bottom: 90),
+                    padding: const EdgeInsets.only(top: 4, bottom: 90),
                     itemBuilder: (context, index) {
                       final item = filteredItems[index];
                       return PizzaCard(
@@ -147,7 +168,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
             bottom: 0,
             child: CartFloatingBar(
               onTap: () {
-                context.go('/checkout');
+                context.push('/checkout');
               },
             ),
           ),

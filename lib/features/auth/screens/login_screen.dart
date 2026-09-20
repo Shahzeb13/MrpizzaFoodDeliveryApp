@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
 import '../providers/auth_provider.dart';
 
@@ -46,35 +48,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: MrPizzaLogoWidget(size: 80, showSlogan: true),
                   ),
                   const SizedBox(height: 32),
-                  Container(
+                  MrCard(
+                    borderRadius: BorderRadius.circular(26),
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const MrEyebrow(text: 'Welcome'),
+                        const SizedBox(height: 8),
                         const Text(
                           'Welcome Back!',
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         const Text(
                           'Sign in to order your favorite wood-fired pizzas.',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
@@ -83,8 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const Text(
                           'Email Address',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                           ),
                         ),
@@ -98,8 +95,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 color: AppColors.primary),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty)
+                            if (value == null || value.trim().isEmpty) {
                               return 'Email is required';
+                            }
                             return null;
                           },
                         ),
@@ -107,8 +105,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const Text(
                           'Password',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             fontSize: 13,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                           ),
                         ),
@@ -135,8 +134,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty)
+                            if (value == null || value.isEmpty) {
                               return 'Password is required';
+                            }
                             return null;
                           },
                         ),
@@ -154,8 +154,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: const Text(
                               'Forgot Password?',
                               style: TextStyle(
+                                fontFamily: AppTheme.fontFamily,
                                 fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w800,
                                 color: AppColors.primary,
                               ),
                             ),
@@ -173,18 +174,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         SizedBox(
                           width: double.infinity,
                           height: 52,
-                          child: ElevatedButton(
+                          child: FilledButton(
                             onPressed: authState.isLoading
                                 ? null
                                 : () async {
                                     FocusScope.of(context).unfocus();
-                                    if (!_formKey.currentState!.validate())
+                                    if (!_formKey.currentState!.validate()) {
                                       return;
+                                    }
                                     ref.read(authStateProvider.notifier).login(
                                           _emailController.text,
                                           _passwordController.text,
                                         );
                                   },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 6,
+                              shadowColor:
+                                  AppColors.primary.withValues(alpha: 0.4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
                             child: authState.isLoading
                                 ? const SizedBox(
                                     width: 20,
@@ -192,33 +204,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     child: CircularProgressIndicator(
                                         color: Colors.white, strokeWidth: 2),
                                   )
-                                : const Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Sign In',
+                                        style: TextStyle(
+                                          fontFamily: AppTheme.fontFamily,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Icon(Icons.arrow_forward_rounded,
+                                          size: 17),
+                                    ],
                                   ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
                         "Don't have an account?",
                         style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 14),
+                            fontFamily: AppTheme.fontFamily,
+                            color: AppColors.textSecondary,
+                            fontSize: 14),
                       ),
                       TextButton(
                         onPressed: () => context.go('/signup'),
                         child: const Text(
                           'Sign Up Now',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             fontSize: 14,
                           ),
                         ),

@@ -1,6 +1,26 @@
+import '../../../core/network/supabase_client.dart';
 import '../models/menu_item.dart';
 
-abstract class MenuRepository {
+class MenuRepository {
+  /// Loads the menu from the Supabase `menu_items` table.
+  ///
+  /// Falls back to the bundled mock catalog when the table is empty or the
+  /// fetch fails, so the UI always has items to display.
+  Future<List<MenuItem>> fetchMenuItems() async {
+    try {
+      final rows = await supabase.from('menu_items').select();
+      final items = (rows as List)
+          .whereType<Map<String, dynamic>>()
+          .map((row) => MenuItem.fromMap(row))
+          .where((item) => item.id.isNotEmpty)
+          .toList();
+      if (items.isEmpty) return mockMenuItems;
+      return items;
+    } catch (_) {
+      return mockMenuItems;
+    }
+  }
+
   static const List<ToppingOption> defaultToppings = [
     ToppingOption(name: 'Extra Mozzarella', price: 150.0, icon: '🧀'),
     ToppingOption(name: 'Pepperoni Slices', price: 180.0, icon: '🥩'),

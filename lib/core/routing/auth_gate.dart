@@ -21,7 +21,15 @@ class AuthGate extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     if (authState.isInitializing) {
-      return const SplashScreen();
+      // Splash is rendered before the router's MaterialApp exists, so give it
+      // its own lightweight MaterialApp shell (Directionality/theme) here. It
+      // is swapped for the real router once the initial session check finishes.
+      return MaterialApp(
+        title: 'MrPizza',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        home: const SplashScreen(),
+      );
     }
 
     final router = ref.watch(routerProvider);

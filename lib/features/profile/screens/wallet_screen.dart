@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -32,9 +33,9 @@ class _WalletScreenState extends State<WalletScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Successfully added Rs. ${amount.toStringAsFixed(0)} to wallet!'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.green,
+        content: Text(
+            'Successfully added Rs. ${amount.toStringAsFixed(0)} to wallet!'),
+        backgroundColor: AppColors.success,
       ),
     );
   }
@@ -42,119 +43,77 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'My Wallet',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('My Wallet'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Balance Card
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryDark],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
+            MrDoubleBezel(
+              radius: 26,
+              innerColor: AppColors.surfaceDark,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
+                    children: [
                       Text(
                         'Total Balance',
-                        style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textLight),
                       ),
-                      Icon(Icons.account_balance_wallet_rounded, color: Colors.white70, size: 24),
+                      const MrIconWell(
+                        icon: Icons.account_balance_wallet_rounded,
+                        color: AppColors.accent,
+                        background: Color(0x22E3A63B),
+                        size: 20,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Text(
                     'Rs. ${balance.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
+                    style: Theme.of(context).textTheme.displaySmall
+                        ?.copyWith(color: Colors.white, fontSize: 30),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.verified_user, size: 12, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text(
-                              'Mr. Pizza Pay Active',
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  const MrEyebrow(
+                    text: 'Mr. Pizza Pay Active',
+                    background: Color(0x2EFFFFFF),
+                    foreground: AppColors.accent,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 26),
 
             // Top Up Quick Actions
-            const Text(
-              'Quick Top Up',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 12),
+            const MrSectionTitle(title: 'Quick Top Up'),
+            const SizedBox(height: 14),
             Row(
               children: [500, 1000, 2000].map((amt) {
                 return Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    child: ElevatedButton(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: OutlinedButton(
                       onPressed: () => _addFunds(amt.toDouble()),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 52),
                         foregroundColor: AppColors.primary,
-                        elevation: 1,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          side: const BorderSide(color: AppColors.border),
-                        ),
                       ),
                       child: Text(
-                        '+ Rs. $amt',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        'Rs. $amt',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
@@ -164,12 +123,11 @@ class _WalletScreenState extends State<WalletScreen> {
 
             const SizedBox(height: 28),
 
-            // Recent Activity Title
-            const Text(
-              'Recent Transactions',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            const MrSectionTitle(
+              title: 'Recent Transactions',
+              eyebrow: 'Activity',
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             ListView.builder(
               shrinkWrap: true,
@@ -177,23 +135,24 @@ class _WalletScreenState extends State<WalletScreen> {
               itemCount: transactions.length,
               itemBuilder: (context, index) {
                 final item = transactions[index];
-                return Container(
+                final isCredit = item['type'] == 'credit';
+                return MrCard(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
-                  ),
+                  borderRadius: BorderRadius.circular(16),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.08),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.add_card_rounded, color: AppColors.primary, size: 20),
+                      MrIconWell(
+                        icon: isCredit
+                            ? Icons.add_card_rounded
+                            : Icons.send_rounded,
+                        color: isCredit
+                            ? AppColors.success
+                            : AppColors.primary,
+                        background: isCredit
+                            ? const Color(0xFFE4F1E8)
+                            : AppColors.primaryTint,
+                        size: 18,
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -202,23 +161,23 @@ class _WalletScreenState extends State<WalletScreen> {
                           children: [
                             Text(
                               item['title'] as String,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
                             const SizedBox(height: 2),
                             Text(
                               item['date'] as String,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              style: Theme.of(context).textTheme.labelMedium,
                             ),
                           ],
                         ),
                       ),
                       Text(
                         item['amount'] as String,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: Colors.green,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isCredit
+                                  ? AppColors.success
+                                  : AppColors.textPrimary,
+                            ),
                       ),
                     ],
                   ),

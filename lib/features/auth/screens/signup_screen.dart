@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
 import '../providers/auth_provider.dart';
 
@@ -122,35 +124,29 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     child: MrPizzaLogoWidget(size: 70, showSlogan: true),
                   ),
                   const SizedBox(height: 24),
-                  Container(
+                  MrCard(
+                    borderRadius: BorderRadius.circular(26),
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const MrEyebrow(text: 'New here'),
+                        const SizedBox(height: 8),
                         const Text(
                           'Create Account',
                           style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         const Text(
                           'Join Mr. Pizza to order fresh Italian pizzas.',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
@@ -161,7 +157,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const Text(
                           'Full Name',
                           style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -176,10 +175,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                 color: AppColors.primary),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty)
+                            if (value == null || value.trim().isEmpty) {
                               return 'Full name is required';
-                            if (value.trim().length > 100)
+                            }
+                            if (value.trim().length > 100) {
                               return 'Name must be 100 characters or less';
+                            }
                             return null;
                           },
                         ),
@@ -189,7 +190,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const Text(
                           'Email Address',
                           style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -209,7 +213,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const Text(
                           'Phone Number',
                           style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -228,7 +235,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const Text(
                           'Password',
                           style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -250,8 +260,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             ),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty)
+                            if (value == null || value.isEmpty) {
                               return 'Password is required';
+                            }
                             if (!_passwordRules.every((r) => r.met)) {
                               return 'Password does not meet all requirements';
                             }
@@ -279,6 +290,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                 Text(
                                   rule.label,
                                   style: TextStyle(
+                                    fontFamily: AppTheme.fontFamily,
                                     fontSize: 12,
                                     color: rule.met
                                         ? AppColors.success
@@ -298,7 +310,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const Text(
                           'Confirm Password',
                           style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.bold),
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -337,8 +352,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         SizedBox(
                           width: double.infinity,
                           height: 52,
-                          child: ElevatedButton(
+                          child: FilledButton(
                             onPressed: authState.isLoading ? null : _submit,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 6,
+                              shadowColor:
+                                  AppColors.primary.withValues(alpha: 0.4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
                             child: authState.isLoading
                                 ? const SizedBox(
                                     width: 20,
@@ -346,11 +371,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                                     child: CircularProgressIndicator(
                                         color: Colors.white, strokeWidth: 2),
                                   )
-                                : const Text(
-                                    'Create Account',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Create Account',
+                                        style: TextStyle(
+                                          fontFamily: AppTheme.fontFamily,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      SizedBox(width: 10),
+                                      Icon(Icons.person_add_alt_rounded,
+                                          size: 17),
+                                    ],
                                   ),
                           ),
                         ),
@@ -364,15 +399,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       const Text(
                         'Already have an account?',
                         style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 14),
+                            fontFamily: AppTheme.fontFamily,
+                            color: AppColors.textSecondary,
+                            fontSize: 14),
                       ),
                       TextButton(
                         onPressed: () => context.go('/login'),
                         child: const Text(
                           'Sign In',
                           style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
                             color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             fontSize: 14,
                           ),
                         ),

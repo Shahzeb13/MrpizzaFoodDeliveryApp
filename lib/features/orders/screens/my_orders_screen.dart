@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 
 class MyOrdersScreen extends StatelessWidget {
   const MyOrdersScreen({super.key});
@@ -12,42 +13,38 @@ class MyOrdersScreen extends StatelessWidget {
         'id': '#MP-84920',
         'date': 'Today, 2:15 PM',
         'items': '1x Chicken Tikka Supreme (Large), 1x Garlic Bread',
-        'total': 'Rs. 1,850',
-        'status': 'Preparing 👨‍🍳',
-        'statusColor': Colors.orange,
+        'total': 1850,
+        'status': 'Preparing',
+        'statusColor': AppColors.warning,
         'isActive': true,
       },
       {
         'id': '#MP-72104',
         'date': '08 Sep 2026',
         'items': '2x Zinger Burger Deal, 1x 1.5L Pepsi',
-        'total': 'Rs. 1,490',
-        'status': 'Delivered ✅',
-        'statusColor': Colors.green,
+        'total': 1490,
+        'status': 'Delivered',
+        'statusColor': AppColors.success,
         'isActive': false,
       },
       {
         'id': '#MP-61029',
         'date': '24 Aug 2026',
         'items': '1x Pepperoni Feast (Medium)',
-        'total': 'Rs. 990',
-        'status': 'Delivered ✅',
-        'statusColor': Colors.green,
+        'total': 990,
+        'status': 'Delivered',
+        'statusColor': AppColors.success,
         'isActive': false,
       },
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'My Orders',
-          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('My Orders'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -56,24 +53,11 @@ class MyOrdersScreen extends StatelessWidget {
         itemCount: orders.length,
         itemBuilder: (context, index) {
           final order = orders[index];
-          return Container(
+          final isActive = order['isActive'] as bool;
+          return MrCard(
             margin: const EdgeInsets.only(bottom: 14),
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: order['isActive'] as bool ? AppColors.primary : AppColors.border,
-                width: order['isActive'] as bool ? 1.5 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+            borderRadius: BorderRadius.circular(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -82,55 +66,98 @@ class MyOrdersScreen extends StatelessWidget {
                   children: [
                     Text(
                       order['id'] as String,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(color: AppColors.textPrimary),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
                       decoration: BoxDecoration(
-                        color: (order['statusColor'] as Color).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        order['status'] as String,
-                        style: TextStyle(
-                          color: order['statusColor'] as Color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                        color: (order['statusColor'] as Color)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: (order['statusColor'] as Color)
+                              .withValues(alpha: 0.35),
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: order['statusColor'] as Color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            order['status'] as String,
+                            style: TextStyle(
+                              color: order['statusColor'] as Color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  order['date'] as String,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                const Divider(height: 20, color: AppColors.border),
-                Text(
-                  order['items'] as String,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.3),
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Total: ${order['total']}',
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.primary),
+                      order['date'] as String,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    if (isActive)
+                      const MrEyebrow(
+                        text: 'Active',
+                        background: AppColors.primaryTint,
+                        foreground: AppColors.primaryDark,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const MrFadeDivider(),
+                const SizedBox(height: 12),
+                Text(
+                  order['items'] as String,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AppColors.textPrimary, height: 1.35),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        MrPriceText(
+                          (order['total'] as num),
+                          fontSize: 17,
+                        ),
+                      ],
                     ),
                     ElevatedButton(
                       onPressed: () {
                         context.push('/orders/track');
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
                       child: Text(
-                        order['isActive'] as bool ? 'Track Order' : 'Reorder',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                        isActive ? 'Track Order' : 'Reorder',
                       ),
                     ),
                   ],

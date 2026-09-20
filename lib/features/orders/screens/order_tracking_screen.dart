@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/widgets.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   const OrderTrackingScreen({super.key});
@@ -10,21 +12,17 @@ class OrderTrackingScreen extends StatefulWidget {
 }
 
 class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
-  int currentStep = 2; // Step 2: Out for delivery
+  int currentStep = 2;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          'Live Order Tracking',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Live Order Tracking'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () {
             if (Navigator.canPop(context)) {
               Navigator.pop(context);
@@ -35,28 +33,16 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Order ID & Status Header Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primaryDark, AppColors.primary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
+            MrDoubleBezel(
+              radius: 28,
+              innerColor: AppColors.surfaceDark,
+              outerPadding: const EdgeInsets.all(6),
+              innerPadding: const EdgeInsets.all(20),
               child: Column(
                 children: [
                   Row(
@@ -64,42 +50,60 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
+                        children: [
+                          const Text(
                             'ORDER #MP-9842',
                             style: TextStyle(
-                              color: AppColors.accentYellow,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
+                              color: AppColors.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              fontFamily: AppTheme.fontFamily,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             'Baking & On The Way!',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(color: Colors.white),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Estimated arrival in 14 minutes',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textLight),
                           ),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                      const MrDoubleBezel(
+                        radius: 20,
+                        outerPadding: EdgeInsets.all(4),
+                        innerPadding: EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        innerColor: AppColors.surfaceDark,
+                        trayColor: AppColors.primary,
                         child: Column(
-                          children: const [
+                          children: [
                             Text(
                               'EST. TIME',
-                              style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                                fontFamily: AppTheme.fontFamily,
+                              ),
                             ),
+                            SizedBox(height: 2),
                             Text(
                               '14 MIN',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                                fontFamily: AppTheme.fontFamily,
+                              ),
                             ),
                           ],
                         ),
@@ -110,20 +114,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
-
             // Live Simulation Map Box
             Container(
-              height: 190,
+              height: 200,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: AppColors.border),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: AppColors.shadowSoft,
+                    blurRadius: 14,
+                    offset: Offset(0, 6),
                   ),
                 ],
               ),
@@ -131,9 +133,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 children: [
                   // Map Background Styling
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(23),
                     child: Container(
-                      color: const Color(0xFFE5E3DF),
+                      color: AppColors.sand,
                       child: Stack(
                         children: [
                           // Road Grid Lines
@@ -141,36 +143,66 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             top: 40,
                             left: 0,
                             right: 0,
-                            child: Container(height: 16, color: Colors.white),
+                            child: Container(
+                                height: 16, color: AppColors.surface),
                           ),
                           Positioned(
                             top: 110,
                             left: 0,
                             right: 0,
-                            child: Container(height: 24, color: Colors.white),
+                            child: Container(
+                                height: 24, color: AppColors.surface),
                           ),
                           Positioned(
                             left: 100,
                             top: 0,
                             bottom: 0,
-                            child: Container(width: 18, color: Colors.white),
+                            child: Container(
+                                width: 18, color: AppColors.surface),
                           ),
                           Positioned(
                             right: 90,
                             top: 0,
                             bottom: 0,
-                            child: Container(width: 22, color: Colors.white),
+                            child: Container(
+                                width: 22, color: AppColors.surface),
+                          ),
+                          Positioned(
+                            left: 70,
+                            top: 70,
+                            child: Container(
+                              width: 10,
+                              height: 80,
+                              transform: Matrix4.rotationZ(-0.4),
+                              color: AppColors.surface,
+                            ),
                           ),
                           // Delivery Destination Pin
                           Positioned(
                             right: 60,
                             top: 30,
                             child: Column(
-                              children: const [
-                                Icon(Icons.location_on, color: AppColors.primary, size: 36),
-                                Text(
-                                  'Home',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              children: [
+                                const Icon(Icons.location_on,
+                                    color: AppColors.primary, size: 36),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: AppColors.borderDeep),
+                                  ),
+                                  child: const Text(
+                                    'Home',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      fontFamily: AppTheme.fontFamily,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -178,21 +210,25 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                           // Rider Pin
                           Positioned(
                             left: 90,
-                            top: 85,
+                            top: 95,
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
                                 shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: AppColors.surface, width: 3),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.4),
-                                    blurRadius: 10,
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.4),
+                                    blurRadius: 12,
                                     spreadRadius: 2,
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.two_wheeler, color: Colors.white, size: 20),
+                              child: const Icon(Icons.two_wheeler,
+                                  color: Colors.white, size: 20),
                             ),
                           ),
                         ],
@@ -204,20 +240,31 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                     left: 12,
                     right: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: const [
+                          BoxShadow(
+                              color: AppColors.shadowSoft, blurRadius: 8),
+                        ],
                       ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.near_me, color: AppColors.primary, size: 16),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.near_me,
+                              color: AppColors.primary, size: 16),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Rider Marco is 1.2 km away from your location',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                                fontFamily: AppTheme.fontFamily,
+                              ),
                             ),
                           ),
                         ],
@@ -231,59 +278,64 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             const SizedBox(height: 24),
 
             // Rider Contact Info Card
-            Container(
+            MrCard(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.border),
-              ),
+              borderRadius: BorderRadius.circular(20),
               child: Row(
                 children: [
-                  const CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.primary,
-                    child: Text('👨‍🍳', style: TextStyle(fontSize: 24)),
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTint,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.borderDeep),
+                    ),
+                    child: const Icon(Icons.delivery_dining,
+                        color: AppColors.primary, size: 24),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'Marco Rossi',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        Text(
-                          'Mr. Pizza Senior Rider • 4.95 ⭐',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            const Icon(Icons.star_rounded,
+                                size: 13, color: AppColors.accent),
+                            const SizedBox(width: 3),
+                            Text(
+                              '4.95  |  Mr. Pizza Senior Rider',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.phone, color: AppColors.success, size: 20),
+                    icon: const MrIconWell(
+                      icon: Icons.call_rounded,
+                      color: AppColors.success,
+                      background: Color(0xFFE4F1E8),
                     ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Calling Rider Marco Rossi (+1 555-0192)...')),
+                        const SnackBar(
+                            content: Text(
+                                'Calling Rider Marco Rossi (+1 555-0192)...')),
                       );
                     },
                   ),
                   IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.message, color: AppColors.primary, size: 20),
+                    icon: const MrIconWell(
+                      icon: Icons.chat_bubble_rounded,
+                      color: AppColors.primary,
                     ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -297,12 +349,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
             const SizedBox(height: 24),
 
-            // Tracking Steps
-            const Text(
-              'Order Pipeline',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const MrSectionTitle(
+              eyebrow: 'Progress',
+              title: 'Order Pipeline',
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
 
             _buildTrackingStep(
               index: 0,
@@ -363,11 +414,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.13),
                 shape: BoxShape.circle,
-                border: Border.all(color: color, width: isCurrent ? 2 : 1),
+                border: Border.all(
+                    color: color, width: isCurrent ? 2 : 1.4),
               ),
               child: Icon(icon, color: color, size: 20),
             ),
@@ -375,7 +427,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               Container(
                 width: 2,
                 height: 36,
-                color: isCompleted ? AppColors.success : AppColors.border,
+                color: isCompleted
+                    ? AppColors.success.withValues(alpha: 0.5)
+                    : AppColors.border,
               ),
           ],
         ),
@@ -389,18 +443,17 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     fontSize: 15,
-                    color: isCurrent ? AppColors.primary : AppColors.textPrimary,
+                    color:
+                        isCurrent ? AppColors.primary : AppColors.textPrimary,
+                    fontFamily: AppTheme.fontFamily,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
               ],

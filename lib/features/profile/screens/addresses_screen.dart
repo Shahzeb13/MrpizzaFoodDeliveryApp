@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
 import '../models/profile.dart';
 import '../providers/profile_provider.dart';
 
@@ -40,10 +41,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: AppColors.surface,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -51,8 +49,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
                 child: Form(
@@ -61,21 +59,26 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Add New Address',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
+                      Row(
+                        children: [
+                          const MrIconWell(
+                            icon: Icons.add_location_alt_rounded,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Add New Address',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       TextFormField(
                         controller: _labelController,
                         textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
                           labelText: 'Label (e.g. Home, Hostel)',
-                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.label_outline_rounded),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -90,7 +93,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                         maxLines: 2,
                         decoration: const InputDecoration(
                           labelText: 'Complete Address Details',
-                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.location_on_outlined),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -114,7 +117,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                               ],
                               decoration: const InputDecoration(
                                 labelText: 'Latitude (optional)',
-                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.explore_outlined),
                               ),
                             ),
                           ),
@@ -131,32 +134,20 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                               ],
                               decoration: const InputDecoration(
                                 labelText: 'Longitude (optional)',
-                                border: OutlineInputBorder(),
+                                prefixIcon: Icon(Icons.explore_outlined),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 22),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _saving
                               ? null
                               : () => _submitNewAddress(setSheetState),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            _saving ? 'Saving...' : 'Save Address',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
-                          ),
+                          child: Text(_saving ? 'Saving...' : 'Save Address'),
                         ),
                       ),
                     ],
@@ -193,7 +184,6 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Address added successfully!'),
-          behavior: SnackBarBehavior.floating,
         ),
       );
     } catch (e) {
@@ -201,8 +191,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to add address. Please try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.warning,
           ),
         );
       }
@@ -223,7 +212,6 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Default address updated'),
-            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -232,8 +220,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to update default address.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.warning,
           ),
         );
       }
@@ -257,8 +244,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text(
                 'Delete',
-                style: TextStyle(
-                    color: Colors.redAccent, fontWeight: FontWeight.bold),
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -275,7 +261,6 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Address deleted'),
-            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -284,8 +269,7 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Failed to delete address.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.warning,
           ),
         );
       }
@@ -299,16 +283,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'My Addresses',
-          style: TextStyle(
-              color: AppColors.textPrimary, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('My Addresses'),
+        backgroundColor: AppColors.surface,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -318,15 +296,19 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline,
-                  size: 48, color: AppColors.textLight),
+              const MrIconWell(
+                icon: Icons.error_outline,
+                color: AppColors.textSecondary,
+                background: AppColors.sand,
+                size: 28,
+              ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Could not load your addresses',
-                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
+              OutlinedButton(
                 onPressed: () => ref.invalidate(addressesFutureProvider),
                 child: const Text('Retry'),
               ),
@@ -339,18 +321,23 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.location_off_rounded,
-                      size: 48, color: AppColors.textLight),
+                  MrIconWell(
+                    icon: Icons.location_off_rounded,
+                    color: AppColors.textSecondary,
+                    background: AppColors.sand,
+                    size: 28,
+                  ),
                   SizedBox(height: 12),
                   Text(
                     'No saved addresses yet',
-                    style:
-                        TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 16, color: AppColors.textSecondary),
                   ),
                   SizedBox(height: 4),
                   Text(
                     'Add your first delivery address below',
-                    style: TextStyle(fontSize: 13, color: AppColors.textLight),
+                    style: TextStyle(
+                        fontSize: 13, color: AppColors.textLight),
                   ),
                 ],
               ),
@@ -362,19 +349,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
             itemCount: addresses.length,
             itemBuilder: (context, index) {
               final address = addresses[index];
-              return Container(
+              return MrCard(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: address.isDefault
-                        ? AppColors.primary
-                        : AppColors.border,
-                    width: address.isDefault ? 1.5 : 1,
-                  ),
-                ),
+                borderRadius: BorderRadius.circular(18),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -383,8 +361,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryTint,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
@@ -403,31 +381,17 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                                   Flexible(
                                     child: Text(
                                       address.label,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                        color: AppColors.textPrimary,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall,
                                     ),
                                   ),
                                   if (address.isDefault) ...[
                                     const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppColors.primary.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: const Text(
-                                        'DEFAULT',
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                    const MrEyebrow(
+                                      text: 'Default',
+                                      background: AppColors.primaryTint,
+                                      foreground: AppColors.primaryDark,
                                     ),
                                   ],
                                 ],
@@ -435,11 +399,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                               const SizedBox(height: 6),
                               Text(
                                 address.addressLine,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary,
-                                  height: 1.3,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(height: 1.35),
                               ),
                               if (address.latitude != null &&
                                   address.longitude != null) ...[
@@ -447,10 +410,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                                 Text(
                                   'Lat: ${address.latitude!.toStringAsFixed(6)}  '
                                   'Lng: ${address.longitude!.toStringAsFixed(6)}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textLight,
-                                  ),
+                                  style:
+                                      Theme.of(context).textTheme.labelMedium,
                                 ),
                               ],
                             ],
@@ -467,14 +428,10 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                             onPressed: () => _setDefault(address),
                             icon: const Icon(Icons.star_outline, size: 18),
                             label: const Text('Set as Default'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              visualDensity: VisualDensity.compact,
-                            ),
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.redAccent, size: 20),
+                              color: AppColors.warning, size: 20),
                           onPressed: () => _confirmDelete(address),
                         ),
                       ],
@@ -488,19 +445,11 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: ElevatedButton.icon(
             onPressed: _showAddAddressDialog,
             icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text('Add New Address',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
+            label: const Text('Add New Address'),
           ),
         ),
       ),
