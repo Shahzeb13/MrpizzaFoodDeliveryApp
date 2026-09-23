@@ -32,12 +32,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _obscureConfirmPassword = true;
 
   @override
-  void initState() {
-    super.initState();
-    _passwordController.addListener(() => setState(() {}));
-  }
-
-  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
@@ -272,36 +266,42 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         const SizedBox(height: 8),
 
                         // Real-time password strength checklist
-                        ..._passwordRules.map(
-                          (rule) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  rule.met
-                                      ? Icons.check_circle
-                                      : Icons.circle_outlined,
-                                  size: 14,
-                                  color: rule.met
-                                      ? AppColors.success
-                                      : AppColors.textLight,
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _passwordController,
+                          builder: (context, _, __) => Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: _passwordRules.map(
+                              (rule) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      rule.met
+                                          ? Icons.check_circle
+                                          : Icons.circle_outlined,
+                                      size: 14,
+                                      color: rule.met
+                                          ? AppColors.success
+                                          : AppColors.textLight,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      rule.label,
+                                      style: TextStyle(
+                                        fontFamily: AppTheme.fontFamily,
+                                        fontSize: 12,
+                                        color: rule.met
+                                            ? AppColors.success
+                                            : AppColors.textSecondary,
+                                        fontWeight: rule.met
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  rule.label,
-                                  style: TextStyle(
-                                    fontFamily: AppTheme.fontFamily,
-                                    fontSize: 12,
-                                    color: rule.met
-                                        ? AppColors.success
-                                        : AppColors.textSecondary,
-                                    fontWeight: rule.met
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ).toList(),
                           ),
                         ),
                         const SizedBox(height: 8),

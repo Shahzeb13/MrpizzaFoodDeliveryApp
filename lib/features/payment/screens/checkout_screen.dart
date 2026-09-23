@@ -208,25 +208,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
 
-    final branch = checkout.branch;
+    // If branch hasn't auto-resolved yet (async), try to resolve it now.
+    var resolvedCheckout = checkout;
+    if (checkout.branch == null) {
+      final branches = ref.read(branchesFutureProvider).value ?? const [];
+      final addresses = ref.read(addressesFutureProvider).value ?? const [];
+      final notifier = ref.read(checkoutProvider.notifier);
+      if (checkout.orderType == OrderType.pickup && branches.isNotEmpty) {
+        notifier.selectBranch(branches.first);
+      } else if (checkout.address != null && branches.isNotEmpty) {
+        notifier.selectAddress(checkout.address!, branches: branches);
+      } else if (addresses.isNotEmpty && branches.isNotEmpty) {
+        notifier.selectDeliveryDefault(addresses: addresses, branches: branches);
+      }
+      resolvedCheckout = ref.read(checkoutProvider);
+    }
+
+    final branch = resolvedCheckout.branch;
     if (branch == null) {
       _showMessage('Please select a branch first.');
       return;
     }
-    if (checkout.isDelivery && checkout.address == null) {
+    if (resolvedCheckout.isDelivery && resolvedCheckout.address == null) {
       _showMessage('Please select a delivery address.');
       return;
     }
 
     setState(() => _isPlacingOrder = true);
+    final totals = OrderTotals(subtotal: cart.subtotal, orderType: resolvedCheckout.orderType);
     try {
-      final totals =
-          OrderTotals(subtotal: cart.subtotal, orderType: checkout.orderType);
       final order = Order(
         customerId: userId,
         branchId: branch.id,
-        addressId: checkout.isDelivery ? checkout.address!.id : null,
-        orderType: checkout.orderType,
+        addressId: resolvedCheckout.isDelivery ? resolvedCheckout.address!.id : null,
+        orderType: resolvedCheckout.orderType,
         totals: totals,
         items: cart.items
             .map(
@@ -246,12 +261,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    // Snapshot cart BEFORE clearing so the tracking screen can display items.
+    ref.read(lastOrderSnapshotProvider.notifier).state = LastOrderSnapshot(
+      items: List.unmodifiable(cart.items),
+      totals: totals,
+      orderType: resolvedCheckout.orderType,
+    );
+
     ref.read(cartProvider.notifier).clearCart();
     if (!mounted) return;
-    _showMessage(
-      checkout.isDelivery ? 'Order confirmed! It is on its way.' : 'Order confirmed! Ready for pickup.',
-    );
-    context.go('/home');
+    context.go('/orders/track');
   }
 
   void _showMessage(String message, {bool isError = false}) {
@@ -1110,7 +1129,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     CheckoutState checkout,
     OrderTotals totals,
   ) {
-    final canPlace = !_isPlacingOrder && checkout.branch != null;
+    // Button is enabled when:
+    // - Delivery: an address is selected (branch auto-resolves from address)
+    // - Pickup: a branch is selected
+    // - Not already submitting
+    final hasAddress = checkout.address != null;
+    final hasBranch = checkout.branch != null;
+    final canPlace = !_isPlacingOrder &&
+        (checkout.isDelivery ? hasAddress || hasBranch : hasBranch);
     return SizedBox(
       width: double.infinity,
       height: 58,

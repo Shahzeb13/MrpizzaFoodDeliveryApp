@@ -1,9 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../menu/models/menu_item.dart';
 import '../../profile/models/profile.dart';
 import '../data/orders_repository.dart';
 import '../models/branch.dart';
 import '../models/order.dart';
+
+/// Snapshot of the most recently placed order, kept alive so the tracking
+/// screen can display the real items even after the cart is cleared.
+class LastOrderSnapshot {
+  final List<CartItem> items;
+  final OrderTotals totals;
+  final OrderType orderType;
+
+  const LastOrderSnapshot({
+    required this.items,
+    required this.totals,
+    required this.orderType,
+  });
+}
+
+final lastOrderSnapshotProvider =
+    StateProvider<LastOrderSnapshot?>((ref) => null);
 
 final ordersRepositoryProvider =
     Provider<OrdersRepository>((ref) => OrdersRepository());

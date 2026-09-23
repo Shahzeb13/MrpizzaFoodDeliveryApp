@@ -261,8 +261,8 @@ class CustomerReviewsSection extends StatelessWidget {
                   boxShadow: const [
                     BoxShadow(
                       color: AppColors.shadowSoft,
-                      blurRadius: 14,
-                      offset: Offset(0, 6),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
                     ),
                   ],
                 ),
@@ -360,8 +360,8 @@ class PizzaCard extends ConsumerWidget {
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadowSoft,
-            blurRadius: 16,
-            offset: Offset(0, 7),
+            blurRadius: 10,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -507,8 +507,8 @@ class CategoryHeroCard extends StatelessWidget {
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadow,
-            blurRadius: 16,
-            offset: Offset(0, 8),
+            blurRadius: 10,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -624,8 +624,8 @@ class GridItemCard extends ConsumerWidget {
           boxShadow: const [
             BoxShadow(
               color: AppColors.shadowSoft,
-              blurRadius: 12,
-              offset: Offset(0, 6),
+              blurRadius: 8,
+              offset: Offset(0, 4),
             ),
           ],
         ),

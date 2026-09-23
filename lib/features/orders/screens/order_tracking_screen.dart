@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
+import '../../menu/models/menu_item.dart';
+import '../providers/orders_provider.dart';
 
-class OrderTrackingScreen extends StatefulWidget {
+class OrderTrackingScreen extends ConsumerStatefulWidget {
   const OrderTrackingScreen({super.key});
 
   @override
-  State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
+  ConsumerState<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
 }
 
-class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
+class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
   int currentStep = 2;
 
   @override
@@ -349,6 +352,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
             const SizedBox(height: 24),
 
+            // Order Items from the placed order
+            _buildOrderItemsSection(),
+
+            const SizedBox(height: 24),
+
             const MrSectionTitle(
               eyebrow: 'Progress',
               title: 'Order Pipeline',
@@ -460,6 +468,167 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildOrderItemsSection() {
+    final snapshot = ref.watch(lastOrderSnapshotProvider);
+    if (snapshot == null || snapshot.items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        MrSectionTitle(
+          eyebrow: 'What You Ordered',
+          title: 'Order Items',
+          trailing: Text(
+            'Rs. ${snapshot.totals.total.toInt()}',
+            style: const TextStyle(
+              fontFamily: AppTheme.fontFamily,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...snapshot.items.map((cartItem) => _buildOrderItemRow(cartItem)),
+        const SizedBox(height: 8),
+        _buildTotalsRow(snapshot),
+      ],
+    );
+  }
+
+  Widget _buildOrderItemRow(CartItem cartItem) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              cartItem.item.imageUrl,
+              width: 48,
+              height: 48,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 48,
+                height: 48,
+                color: AppColors.sand,
+                child: const Center(
+                    child: Text('🍕', style: TextStyle(fontSize: 22))),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cartItem.item.title,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${cartItem.size.name} • ${cartItem.crust.name}',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'x${cartItem.quantity}',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Rs. ${cartItem.totalPrice.toInt()}',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTotalsRow(LastOrderSnapshot snapshot) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryTint,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          _totalLine('Subtotal', 'Rs. ${snapshot.totals.subtotal.toInt()}'),
+          const SizedBox(height: 4),
+          _totalLine('Tax (8%)', 'Rs. ${snapshot.totals.tax.toInt()}'),
+          if (snapshot.totals.deliveryFee > 0) ...[
+            const SizedBox(height: 4),
+            _totalLine('Delivery', 'Rs. ${snapshot.totals.deliveryFee.toInt()}'),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(color: AppColors.border, height: 1),
+          ),
+          _totalLine(
+            'Total',
+            'Rs. ${snapshot.totals.total.toInt()}',
+            bold: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalLine(String label, String value, {bool bold = false}) {
+    final style = TextStyle(
+      fontFamily: AppTheme.fontFamily,
+      fontSize: bold ? 14 : 13,
+      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+      color: bold ? AppColors.primary : AppColors.textSecondary,
+    );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: style),
+        Text(value, style: style),
       ],
     );
   }

@@ -110,27 +110,6 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
     }
   }
 
-  String _getCategoryBannerUrl(ItemCategory cat) {
-    switch (cat) {
-      case ItemCategory.classics:
-        return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.specials:
-        return 'https://images.unsplash.com/photo-1595708684082-a173bb3a06c5?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.burgers:
-        return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.shawarmas:
-        return 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.desserts:
-        return 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.deals:
-        return 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.sides:
-        return 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=800&q=85';
-      case ItemCategory.drinks:
-        return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=85';
-    }
-  }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -141,7 +120,6 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
     final locationState = ref.watch(locationProvider);
 
     return Scaffold(
@@ -423,52 +401,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
               ),
 
               // Categorized Food Sections with HD Category Hero Feature Cards
-              ...ItemCategory.values.expand((cat) {
-                final allItems = ref.watch(menuFutureProvider).value ??
-                    MenuRepository.mockMenuItems;
-                final categoryItems = allItems.where((item) {
-                  final matchesCat = item.category == cat;
-                  final matchesQuery = searchQuery.isEmpty ||
-                      item.title.toLowerCase().contains(searchQuery);
-                  return matchesCat && matchesQuery;
-                }).toList();
-
-                if (categoryItems.isEmpty) return <Widget>[];
-
-                return [
-                  // HD Category Header Cover Banner
-                  SliverToBoxAdapter(
-                    child: Container(
-                      key: _categoryKeys[cat],
-                      child: CategoryHeroCard(
-                        category: cat,
-                        bannerImageUrl: _getCategoryBannerUrl(cat),
-                      ),
-                    ),
-                  ),
-
-                  // Food Items in Category (Clean Minimalist Rows)
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final item = categoryItems[index];
-                        return PizzaCard(
-                          item: item,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => CustomizationBottomSheet(item: item),
-                            );
-                          },
-                        );
-                      },
-                      childCount: categoryItems.length,
-                    ),
-                  ),
-                ];
-              }),
+              _MenuCatalogSection(categoryKeys: _categoryKeys),
 
               const SliverToBoxAdapter(
                 child: SizedBox(height: 20),
@@ -498,6 +431,90 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
           ),
         ],
       ),
+    );
+  }
+}
+
+String _getCategoryBannerUrl(ItemCategory cat) {
+  switch (cat) {
+    case ItemCategory.classics:
+      return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.specials:
+      return 'https://images.unsplash.com/photo-1595708684082-a173bb3a06c5?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.burgers:
+      return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.shawarmas:
+      return 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.desserts:
+      return 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.deals:
+      return 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.sides:
+      return 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=800&q=85';
+    case ItemCategory.drinks:
+      return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=85';
+  }
+}
+
+/// Per-category catalog slivers. A [ConsumerWidget] so that only this section
+/// rebuilds when the search query or menu data changes — the hero, AppBar and
+/// floating cart stay untouched.
+class _MenuCatalogSection extends ConsumerWidget {
+  const _MenuCatalogSection({required this.categoryKeys});
+
+  final Map<ItemCategory, GlobalKey> categoryKeys;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
+    final allItems =
+        ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
+
+    return SliverMainAxisGroup(
+      slivers: <Widget>[
+        ...ItemCategory.values.expand((cat) {
+          final categoryItems = allItems.where((item) {
+            final matchesCat = item.category == cat;
+            final matchesQuery = searchQuery.isEmpty ||
+                item.title.toLowerCase().contains(searchQuery);
+            return matchesCat && matchesQuery;
+          }).toList();
+
+          if (categoryItems.isEmpty) return const <Widget>[];
+
+          return [
+            SliverToBoxAdapter(
+              child: Container(
+                key: categoryKeys[cat],
+                child: CategoryHeroCard(
+                  category: cat,
+                  bannerImageUrl: _getCategoryBannerUrl(cat),
+                ),
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final item = categoryItems[index];
+                  return PizzaCard(
+                    item: item,
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) =>
+                            CustomizationBottomSheet(item: item),
+                      );
+                    },
+                  );
+                },
+                childCount: categoryItems.length,
+              ),
+            ),
+          ];
+        }),
+      ],
     );
   }
 }

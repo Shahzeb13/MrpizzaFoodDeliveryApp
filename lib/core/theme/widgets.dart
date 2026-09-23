@@ -39,8 +39,8 @@ class MrCard extends StatelessWidget {
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadowSoft,
-            blurRadius: 18,
-            offset: Offset(0, 8),
+            blurRadius: 10,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -84,29 +84,35 @@ class MrDoubleBezel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final outerRounded = BorderRadius.circular(radius);
-    return Container(
-      decoration: BoxDecoration(
-        color: trayColor ?? AppColors.sand,
-        borderRadius: outerRounded,
-        border: Border.all(color: AppColors.borderDeep),
-      ),
-      padding: outerPadding,
-      child: Container(
-        width: double.infinity,
-        padding: innerPadding,
-        decoration: BoxDecoration(
-          color: innerColor ?? AppColors.surface,
-          borderRadius: BorderRadius.circular(radius - outerPadding.vertical),
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.shadowSoft,
-              blurRadius: 14,
-              offset: Offset(0, 6),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          decoration: BoxDecoration(
+            color: trayColor ?? AppColors.sand,
+            borderRadius: outerRounded,
+            border: Border.all(color: AppColors.borderDeep),
+          ),
+          padding: outerPadding,
+          child: Container(
+            width:
+                constraints.maxWidth.isFinite ? double.infinity : null,
+            padding: innerPadding,
+            decoration: BoxDecoration(
+              color: innerColor ?? AppColors.surface,
+              borderRadius:
+                  BorderRadius.circular(radius - outerPadding.vertical),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.shadowSoft,
+                  blurRadius: 9,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: child,
-      ),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
