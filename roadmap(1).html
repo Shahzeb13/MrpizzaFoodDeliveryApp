@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Food Delivery App — Build Roadmap</title>
+<style>
+  :root{
+    --bg: #14181A;
+    --panel: #1B2124;
+    --panel-line: #2A3236;
+    --text: #EDEAE2;
+    --text-dim: #98A2A6;
+    --accent: #D64933;
+    --accent-dim: #7A2B20;
+    --sage: #8FA37E;
+    --done: #4F6B57;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    line-height:1.5;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  header{
+    max-width:920px;
+    margin:0 auto;
+    padding:64px 24px 32px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--sage);
+    margin-bottom:14px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:42px;
+    margin:0 0 12px;
+    letter-spacing:-0.01em;
+  }
+  .sub{
+    color:var(--text-dim);
+    font-size:16px;
+    max-width:58ch;
+    margin:0 0 28px;
+  }
+  .stack{
+    display:flex;
+    gap:28px;
+    flex-wrap:wrap;
+    font-size:14px;
+    color:var(--text-dim);
+    border-top:1px solid var(--panel-line);
+    padding-top:18px;
+  }
+  .stack b{ color:var(--text); font-weight:500; }
+
+  .progress-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-top:24px;
+  }
+  .progress-track{
+    flex:1;
+    height:6px;
+    background:var(--panel-line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    width:16.6%;
+    background:var(--done);
+  }
+  .progress-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--text-dim);
+    white-space:nowrap;
+  }
+
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:0 24px 100px;
+  }
+
+  .week{
+    position:relative;
+    padding:36px 0 36px 56px;
+    border-left:1px solid var(--panel-line);
+    margin-left:15px;
+  }
+  .week:last-child{ border-left:1px solid transparent; }
+
+  .week-num{
+    position:absolute;
+    left:-15px;
+    top:36px;
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--text-dim);
+  }
+  .week.done .week-num{
+    background:var(--done);
+    border-color:var(--done);
+    color:#fff;
+  }
+  .week.risk .week-num{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+
+  .week-head{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+    margin-bottom:4px;
+  }
+  .week-title{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:22px;
+  }
+  .week-status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .week-status.done{ color:var(--done); }
+  .week-note{
+    color:var(--text-dim);
+    font-size:14px;
+    margin:6px 0 18px;
+    max-width:62ch;
+  }
+
+  .tasks{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  @media (max-width:640px){
+    .tasks{ grid-template-columns:1fr; }
+    h1{ font-size:32px; }
+  }
+
+  .task{
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:6px;
+    padding:14px 16px;
+  }
+  .task.flag{
+    border-color:var(--accent-dim);
+    background:linear-gradient(180deg, rgba(214,73,51,0.08), rgba(214,73,51,0.02));
+  }
+  .task-name{
+    font-weight:500;
+    font-size:14.5px;
+    margin-bottom:4px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .task-name .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    color:var(--accent);
+    border:1px solid var(--accent-dim);
+    border-radius:3px;
+    padding:1px 6px;
+    text-transform:none;
+  }
+  .task-desc{
+    color:var(--text-dim);
+    font-size:13px;
+  }
+
+  footer{
+    max-width:920px;
+    margin:0 auto;
+    padding:0 24px 80px;
+    border-top:1px solid var(--panel-line);
+    padding-top:28px;
+  }
+  footer .note-title{
+    font-family:'Fraunces', serif;
+    font-size:18px;
+    margin-bottom:10px;
+  }
+  footer ul{
+    margin:0;
+    padding-left:18px;
+    color:var(--text-dim);
+    font-size:14px;
+  }
+  footer li{ margin-bottom:6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">TWO-PERSON BUILD · FLUTTER + SUPABASE + SAFEPAY</div>
+  <h1>Food Delivery App</h1>
+  <p class="sub">Six-week build. Week one is behind us — this is the plan for the five that are left, revised to skip a UI rebuild and fold in loyalty points and vouchers.</p>
+
+  <div class="progress-row">
+    <span class="progress-label">Week 1 of 6</span>
+    <div class="progress-track"><div class="progress-fill"></div></div>
+    <span class="progress-label">5 weeks left</span>
+  </div>
+
+  <div class="stack">
+    <div><b>Stack</b> — Flutter · Supabase · Safepay</div>
+    <div><b>Team</b> — 2 developers</div>
+    <div><b>Riskiest piece</b> — Safepay integration</div>
+  </div>
+</header>
+
+<main>
+
+  <div class="week done">
+    <div class="week-num">1</div>
+    <div class="week-head">
+      <span class="week-title">Week 1</span>
+      <span class="week-status done">DONE</span>
+    </div>
+    <p class="week-note">Initial build. UI needs improving, not rebuilding — so no time is spent on a fresh design system.</p>
+  </div>
+
+  <div class="week">
+    <div class="week-num">2</div>
+    <div class="week-head">
+      <span class="week-title">Week 2</span>
+      <span class="week-status">HEAVY — split by person</span>
+    </div>
+    <p class="week-note">The most parallelizable week. Divide these five across the two of you as early as possible.</p>
+    <div class="tasks">
+      <div class="task"><div class="task-name">Supabase schema</div><div class="task-desc">Users, restaurants, menu, orders, order_status, loyalty_points, vouchers + RLS policies.</div></div>
+      <div class="task"><div class="task-name">Auth + user flows</div><div class="task-desc">Signup, login, address management, profile.</div></div>
+      <div class="task"><div class="task-name">Cart + checkout UI</div><div class="task-desc">Cart logic, order summary, address selection.</div></div>
+      <div class="task"><div class="task-name">Dashboard skeleton</div><div class="task-desc">Admin login, restaurant/menu CRUD screens.</div></div>
+      <div class="task flag"><div class="task-name">Safepay sandbox setup <span class="badge">START EARLY</span></div><div class="task-desc">Register, get sandbox keys, read webhook docs. Low effort — surfaces problems sooner.</div></div>
+      <div class="task flag"><div class="task-name">Apply for Safepay production account <span class="badge">DO NOT DELAY</span></div><div class="task-desc">Submit as soon as the sandbox test call works. Approval is a manual review outside your control — runs in parallel while you keep building against sandbox.</div></div>
+    </div>
+  </div>
+
+  <div class="week">
+    <div class="week-num">3</div>
+    <div class="week-head">
+      <span class="week-title">Week 3</span>
+    </div>
+    <p class="week-note">Payment goes in, plus the features you said were the easy logic.</p>
+    <div class="tasks">
+      <div class="task flag"><div class="task-name">Safepay integration <span class="badge">RISK</span></div><div class="task-desc">Full payment flow + webhook handler with idempotency checks.</div></div>
+      <div class="task"><div class="task-name">Loyalty + vouchers logic</div><div class="task-desc">Apply voucher at checkout, award/redeem points on order completion.</div></div>
+      <div class="task"><div class="task-name">Order tracking</div><div class="task-desc">Real-time order status via Supabase realtime.</div></div>
+      <div class="task"><div class="task-name">Dashboard order management</div><div class="task-desc">View incoming orders, update status from dashboard.</div></div>
+    </div>
+  </div>
+
+  <div class="week risk">
+    <div class="week-num">4</div>
+    <div class="week-head">
+      <span class="week-title">Week 4</span>
+      <span class="week-status">SAFEPAY FOCUS</span>
+    </div>
+    <p class="week-note">This is where payment testing earns its keep — duplicate webhooks, failed payments, and race conditions on stock or vouchers.</p>
+    <div class="tasks">
+      <div class="task flag"><div class="task-name">Safepay edge-case testing <span class="badge">RISK</span></div><div class="task-desc">Duplicate webhooks, retries, failed payments, concurrent stock/voucher updates.</div></div>
+      <div class="task"><div class="task-name">Integration testing</div><div class="task-desc">Order → pay → dashboard sees it → status updates → loyalty points applied.</div></div>
+      <div class="task"><div class="task-name">UI polish pass</div><div class="task-desc">Spacing, colors, loading / error / empty states.</div></div>
+    </div>
+  </div>
+
+  <div class="week">
+    <div class="week-num">5</div>
+    <div class="week-head">
+      <span class="week-title">Week 5</span>
+    </div>
+    <p class="week-note">Last mile before delivery.</p>
+    <div class="tasks">
+      <div class="task"><div class="task-name">Final QA</div><div class="task-desc">Real devices, poor network, payment failures, concurrent test orders.</div></div>
+      <div class="task"><div class="task-name">Buffer day</div><div class="task-desc">Reserved for whatever QA turns up.</div></div>
+      <div class="task"><div class="task-name">Build + deliver</div><div class="task-desc">Production builds, handoff docs, deployment.</div></div>
+    </div>
+  </div>
+
+  <div class="week">
+    <div class="week-num">6</div>
+    <div class="week-head">
+      <span class="week-title">Week 6</span>
+      <span class="week-status">SPARE</span>
+    </div>
+    <p class="week-note">The only real slack in this schedule. If everything above landed on time, spend this hardening Safepay further before go-live — it's the piece with the least room for surprises in production.</p>
+  </div>
+
+</main>
+
+<footer>
+  <div class="note-title">Watch points</div>
+  <ul>
+    <li>Every webhook handler must check "has this transaction ID already been processed?" before acting on it.</li>
+    <li>Stock counts and voucher redemptions need atomic DB updates, not read-then-write in app code.</li>
+    <li>Check Supabase's connection pool limit on your tier once order volume expectations are clearer.</li>
+  </ul>
+</footer>
+
+</body>
+</html>
