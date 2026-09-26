@@ -5,6 +5,7 @@ import 'package:mrpizza/core/providers/location_provider.dart';
 import 'package:mrpizza/features/location/data/location_repository.dart';
 import 'package:mrpizza/features/location/models/captured_location.dart';
 import 'package:mrpizza/features/profile/data/profile_repository.dart';
+import 'package:mrpizza/features/profile/models/profile.dart';
 import 'package:mrpizza/features/profile/providers/profile_provider.dart';
 import 'package:mrpizza/features/profile/screens/addresses_screen.dart';
 
@@ -16,19 +17,31 @@ class RecordingProfileRepository extends ProfileRepository {
   String? savedAddressLine;
   double? savedLatitude;
   double? savedLongitude;
+  bool savedAsDefault = false;
 
   @override
-  Future<void> addAddress({
+  Future<UserAddress> addAddress({
     required String userId,
     required String label,
     required String addressLine,
     double? latitude,
     double? longitude,
+    bool isDefault = false,
   }) async {
     savedLabel = label;
     savedAddressLine = addressLine;
     savedLatitude = latitude;
     savedLongitude = longitude;
+    savedAsDefault = isDefault;
+    return UserAddress(
+      id: 'addr-saved-by-fake',
+      userId: userId,
+      label: label,
+      addressLine: addressLine,
+      latitude: latitude,
+      longitude: longitude,
+      isDefault: isDefault,
+    );
   }
 }
 
@@ -102,7 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Label (e.g. Home, Hostel)'), 'Home');
+        find.widgetWithText(TextFormField, 'Label (optional)'), 'Home');
     await tester.tap(find.text('Save Address'));
     await tester.pumpAndSettle();
 
@@ -118,7 +131,7 @@ void main() {
     await openAddAddressSheet(tester);
 
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Label (e.g. Home, Hostel)'), 'Home');
+        find.widgetWithText(TextFormField, 'Label (optional)'), 'Home');
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Complete Address Details'),
       'House 12, Street 4',
@@ -146,7 +159,7 @@ void main() {
 
     // The customer can still type an address and save it.
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Label (e.g. Home, Hostel)'), 'Home');
+        find.widgetWithText(TextFormField, 'Label (optional)'), 'Home');
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Complete Address Details'),
       'House 12, Street 4',
@@ -155,6 +168,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(profileRepository.savedAddressLine, 'House 12, Street 4');
+  });
+
+  testWidgets('names the address for you when the label is left blank',
+      (tester) async {
+    await pumpAddressesScreen(tester);
+    await openAddAddressSheet(tester);
+
+    // Label deliberately left empty.
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Complete Address Details'),
+      'Al Mansoor Town, Abbottabad',
+    );
+    await tester.tap(find.text('Save Address'));
+    await tester.pumpAndSettle();
+
+    expect(profileRepository.savedLabel, 'Al Mansoor Town');
   });
 
   testWidgets('offers a settings button when permission is blocked forever',

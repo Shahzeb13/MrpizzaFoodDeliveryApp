@@ -32,6 +32,13 @@ abstract class AddressTextLookup {
   Future<String?> lookupAddressText(CapturedCoordinates coordinates);
 }
 
+/// Turns typed address text into coordinates, so a customer who types instead
+/// of dropping a pin can still have the closest branch worked out.
+abstract class AddressCoordinateLookup {
+  /// Returns the point [query] refers to, or null when nothing matched.
+  Future<CapturedCoordinates?> lookupCoordinates(String query);
+}
+
 /// A location capture that could not be completed, with a message that is safe
 /// to show to the user.
 class LocationCaptureException implements Exception {
@@ -56,9 +63,14 @@ class LocationRepository {
   final DeviceLocationSource deviceSource;
   final AddressTextLookup addressLookup;
 
+  /// Optional. When absent, typed addresses simply never gain coordinates and
+  /// the customer is asked to choose a branch instead.
+  final AddressCoordinateLookup? coordinateLookup;
+
   const LocationRepository({
     required this.deviceSource,
     required this.addressLookup,
+    this.coordinateLookup,
   });
 
   /// Captures the current position and its street address.
@@ -111,6 +123,28 @@ class LocationRepository {
 
   /// Sends the user to the OS settings page for this app.
   Future<void> openAppSettings() => deviceSource.openAppSettings();
+
+  /// Turns typed address text into coordinates.
+  ///
+  /// Never throws: a geocoder that is missing, offline, rate limited, or simply
+  /// has no match returns null, and the customer keeps the text they typed.
+  Future<CapturedCoordinates?> geocodeAddressText(String query) async {
+    final lookup = coordinateLookup;
+    if (lookup == null) return null;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return null;
+
+    try {
+      final coordinates = await lookup.lookupCoordinates(trimmed);
+      if (coordinates == null) return null;
+      if (!_isPlausibleEarthCoordinate(coordinates)) return null;
+      return coordinates;
+    } catch (_) {
+      // Forward geocoding is a convenience for working out the nearest branch.
+      // Any failure just means the customer picks a branch by hand.
+      return null;
+    }
+  }
 
   Future<String> _lookupAddressTextOrEmpty(CapturedCoordinates coordinates) async {
     try {

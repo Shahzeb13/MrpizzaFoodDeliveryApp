@@ -5,7 +5,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
-import '../models/menu_item.dart';
 import '../providers/menu_provider.dart';
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -15,24 +14,39 @@ class MenuScreen extends ConsumerStatefulWidget {
   ConsumerState<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+// TickerProviderStateMixin, not SingleTickerProviderStateMixin: the tab
+// controller is rebuilt once the real category count is known, which means a
+// second ticker is created after the first is disposed.
+class _MenuScreenState extends ConsumerState<MenuScreen>
+    with TickerProviderStateMixin {
+  // Built from the real `categories` rows, so the length is not known until
+  // the catalog arrives. Index 0 is the "All" tab.
+  TabController? _tabController;
   bool _isGridView = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: ItemCategory.values.length + 1, vsync: this);
-    _tabController.addListener(_onTabChanged);
+  void _syncTabController(int categoryCount) {
+    final length = categoryCount + 1;
+    final existing = _tabController;
+    if (existing != null && existing.length == length) return;
+
+    existing?.removeListener(_onTabChanged);
+    existing?.dispose();
+    _tabController = TabController(length: length, vsync: this)
+      ..addListener(_onTabChanged);
   }
 
   void _onTabChanged() {
-    if (!_tabController.indexIsChanging && mounted) {
-      final category = _tabController.index == 0 ? null : ItemCategory.values[_tabController.index - 1];
-      if (ref.read(selectedCategoryProvider) != category) {
+    final controller = _tabController;
+    if (controller == null) return;
+    if (!controller.indexIsChanging && mounted) {
+      final categories = ref.read(menuCategoriesProvider);
+      final index = controller.index - 1;
+      final categoryId =
+          (index >= 0 && index < categories.length) ? categories[index].id : null;
+      if (ref.read(selectedCategoryIdProvider) != categoryId) {
         Future.microtask(() {
           if (mounted) {
-            ref.read(selectedCategoryProvider.notifier).state = category;
+            ref.read(selectedCategoryIdProvider.notifier).state = categoryId;
           }
         });
       }
@@ -41,13 +55,16 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.removeListener(_onTabChanged);
+    _tabController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final filteredItems = ref.watch(filteredMenuItemsProvider);
+    final categories = ref.watch(menuCategoriesProvider);
+    _syncTabController(categories.length);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -108,7 +125,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> with SingleTickerProvid
               ),
               tabs: [
                 const Tab(text: 'All Items'),
-                ...ItemCategory.values.map((cat) => Tab(text: cat.label)),
+                ...categories.map((category) => Tab(text: category.name)),
               ],
             ),
           ),

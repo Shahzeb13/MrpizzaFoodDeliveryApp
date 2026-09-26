@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
-import '../../menu/data/menu_repository.dart';
 import '../../menu/models/menu_item.dart';
 import '../../menu/providers/menu_provider.dart';
 
@@ -19,7 +18,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   Widget build(BuildContext context) {
     final favoriteIds = ref.watch(favoritesProvider);
     final menu =
-        ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
+        ref.watch(allMenuItemsProvider);
     final favoriteItems =
         menu.where((item) => favoriteIds.contains(item.id)).toList();
     return Scaffold(
@@ -105,7 +104,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              item.category.label,
+                              item.categoryName,
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             const SizedBox(height: 8),

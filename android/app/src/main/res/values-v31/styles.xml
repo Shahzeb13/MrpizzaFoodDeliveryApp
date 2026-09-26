@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31) splash screen. The platform replaces the legacy
+     windowBackground with its own masked splash, so the themed attributes are
+     needed here or the app shows a blank ivory screen on launch.
+
+     windowSplashScreenAnimatedIcon is masked to a circle showing only the inner
+     two thirds, which is why splash_icon_and12.png keeps the logo at 55%. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_and12</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimationDuration">200</item>
+    </style>
+
+    <!-- Post-splash theme. Same ivory as AppColors.background so there is no
+         flash before the first Flutter frame. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+</resources>

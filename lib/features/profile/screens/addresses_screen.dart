@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
+import '../data/address_book.dart';
 import '../models/profile.dart';
 import '../providers/profile_provider.dart';
 
@@ -118,15 +119,14 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                         controller: _labelController,
                         textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(
-                          labelText: 'Label (e.g. Home, Hostel)',
+                          labelText: 'Label (optional)',
+                          hintText: 'Leave blank and we will name it for you',
                           prefixIcon: Icon(Icons.label_outline_rounded),
                         ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Label is required';
-                          }
-                          return null;
-                        },
+                        // Deliberately never validated. The label is a nicety for
+                        // the customer's own list; making it required meant the
+                        // form could not be completed without inventing one, which
+                        // is the friction this screen is meant to avoid.
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -248,10 +248,18 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     setSheetState(() => _saving = true);
 
     try {
+      // A blank label is filled in from the address text, so the customer only
+      // types one when they want a specific name.
+      final typed = _labelController.text.trim();
+      final line = _addressController.text.trim();
       await ref.read(profileRepositoryProvider).addAddress(
             userId: userId,
-            label: _labelController.text.trim(),
-            addressLine: _addressController.text.trim(),
+            label: typed.isNotEmpty
+                ? typed
+                : AddressBook.deriveLabel(
+                    line.isNotEmpty ? line : 'Pinned location',
+                  ),
+            addressLine: line,
             latitude: _capturedLatitude,
             longitude: _capturedLongitude,
           );

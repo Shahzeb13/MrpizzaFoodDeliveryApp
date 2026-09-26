@@ -1,5 +1,4 @@
-import 'dart:math' as math;
-
+import '../../../core/geo/geo.dart';
 import '../../profile/models/profile.dart';
 
 /// A restaurant branch from the `branches` table.
@@ -34,20 +33,8 @@ class Branch {
   }
 
   /// Haversine distance in kilometers between two lat/lng points.
-  static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
-    const earthRadiusKm = 6371.0;
-    double toRadians(double deg) => deg * (math.pi / 180.0);
-
-    final dLat = toRadians(lat2 - lat1);
-    final dLon = toRadians(lon2 - lon1);
-
-    final a = math.pow(math.sin(dLat / 2), 2) +
-        math.cos(toRadians(lat1)) *
-            math.cos(toRadians(lat2)) *
-            math.pow(math.sin(dLon / 2), 2);
-
-    return earthRadiusKm * 2 * math.asin(math.sqrt(a));
-  }
+  static double haversineKm(double lat1, double lon1, double lat2, double lon2) =>
+      Geo.haversineKm(lat1, lon1, lat2, lon2);
 }
 
 /// Outcome of trying to pick the branch nearest to a delivery address.
@@ -75,16 +62,33 @@ class BranchSelection {
     UserAddress address,
     List<Branch> branches,
   ) {
-    if (branches.isEmpty) return none;
+    return selectNearestBranchToPoint(
+      latitude: address.latitude,
+      longitude: address.longitude,
+      branches: branches,
+    );
+  }
 
-    final addressLat = address.latitude;
-    final addressLng = address.longitude;
-    if (addressLat == null || addressLng == null) return none;
+  /// Picks the branch closest to a raw coordinate, with no saved address
+  /// involved.
+  ///
+  /// This is the path a live map pin takes: the customer chose a position on
+  /// screen, so the closest branch can be worked out even when nothing has been
+  /// saved to the `addresses` table yet. When no branch carries coordinates
+  /// the first branch is returned but no nearest claim is made, because nothing
+  /// was actually compared.
+  static BranchSelection selectNearestBranchToPoint({
+    required double? latitude,
+    required double? longitude,
+    required List<Branch> branches,
+  }) {
+    if (branches.isEmpty) return none;
+    if (latitude == null || longitude == null) return none;
 
     Branch? nearest;
     var minDistance = double.infinity;
     for (final branch in branches) {
-      final distance = branch.distanceTo(addressLat, addressLng);
+      final distance = branch.distanceTo(latitude, longitude);
       if (distance == null) continue;
       if (distance < minDistance) {
         minDistance = distance;

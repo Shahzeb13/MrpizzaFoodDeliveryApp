@@ -32,21 +32,31 @@ class ProfileRepository {
         .toList();
   }
 
-  Future<void> addAddress({
+  /// Inserts an address and returns the stored row, including the id the
+  /// database assigned. Callers need that id to attach an order to the address
+  /// or to mark it as the default straight after saving.
+  Future<UserAddress> addAddress({
     required String userId,
     required String label,
     required String addressLine,
     double? latitude,
     double? longitude,
-  }) {
-    return supabase.from('addresses').insert({
-      'user_id': userId,
-      'label': label,
-      'address_line': addressLine,
-      'latitude': latitude,
-      'longitude': longitude,
-      'is_default': false,
-    });
+    bool isDefault = false,
+  }) async {
+    final res = await supabase
+        .from('addresses')
+        .insert({
+          'user_id': userId,
+          'label': label,
+          'address_line': addressLine,
+          'latitude': latitude,
+          'longitude': longitude,
+          'is_default': isDefault,
+        })
+        .select()
+        .single();
+
+    return UserAddress.fromMap(res);
   }
 
   /// Marks [addressId] as the single default for the user by clearing

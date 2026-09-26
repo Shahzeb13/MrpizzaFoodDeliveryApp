@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mr. Pizza branded launch splash: dark surface matching SplashScreen.backgroundColor -->
+<!-- Mr. Pizza splash: warm ivory background with the logo centred.
+     The background matches AppColors.background in Dart, so the handover from
+     the native splash to the first Flutter frame is invisible. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Dark charcoal background matching AppColors.surfaceDark (#1C1C1E) -->
     <item android:drawable="@color/splash_background" />
+    <!-- The artwork is 512px square; gravity centres it and the bitmap is
+         already sized so the logo occupies the middle ~86% of it. -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splash_logo" />
+    </item>
 </layer-list>

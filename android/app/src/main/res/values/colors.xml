@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Mr. Pizza dark surface color, matches AppColors.surfaceDark in Dart -->
-    <color name="splash_background">#FF1C1C1E</color>
+    <!-- Warm Ivory, matches AppColors.background in Dart so there is no flash
+         between the native splash and the first Flutter frame. -->
+    <color name="splash_background">#FBF5EE</color>
+
+    <!-- Adaptive launcher background: the Mr. Pizza brick red, sampled from the
+         logo ribbon (#E02C2D). The logo artwork sits on top as the foreground. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

@@ -7,7 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
 import '../../menu/data/menu_repository.dart';
-import '../../menu/models/menu_item.dart';
+import '../../menu/models/menu_category.dart';
 import '../../menu/providers/menu_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -36,12 +36,17 @@ class HomeFeedView extends ConsumerStatefulWidget {
   ConsumerState<HomeFeedView> createState() => _HomeFeedViewState();
 }
 
-class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+// TickerProviderStateMixin, not SingleTickerProviderStateMixin: the tab
+// controller is rebuilt once the real category count is known, which means a
+// second ticker is created after the first is disposed.
+class _HomeFeedViewState extends ConsumerState<HomeFeedView>
+    with TickerProviderStateMixin {
+  // Category tab count is not known until the catalog loads, so the controller
+  // is built once the real `categories` rows arrive rather than from a
+  // hardcoded list of headings.
+  TabController? _tabController;
   final ScrollController _scrollController = ScrollController();
-  final Map<ItemCategory, GlobalKey> _categoryKeys = {
-    for (var cat in ItemCategory.values) cat: GlobalKey(),
-  };
+  final Map<String, GlobalKey> _categoryKeys = {};
 
   bool _isSearching = false;
   bool _isProgrammaticScroll = false;
@@ -50,8 +55,6 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: ItemCategory.values.length, vsync: this);
-    _tabController.addListener(_handleTabSelection);
     _scrollController.addListener(_handleScroll);
 
     // Prompt location dialog on initial app view if not set
@@ -69,14 +72,39 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
     });
   }
 
+  /// Keeps the tab bar in step with the number of real categories.
+  void _syncTabController(List<MenuCategory> categories) {
+    final existing = _tabController;
+    if (existing != null && existing.length == categories.length) return;
+
+    existing?.removeListener(_handleTabSelection);
+    existing?.dispose();
+
+    final controller = TabController(length: categories.length, vsync: this)
+      ..addListener(_handleTabSelection);
+    _tabController = controller;
+  }
+
+  @override
+  void dispose() {
+    _tabController?.removeListener(_handleTabSelection);
+    _tabController?.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _handleTabSelection() {
-    if (_tabController.indexIsChanging) {
-      _scrollToCategory(ItemCategory.values[_tabController.index]);
+    final categories = ref.read(menuCategoriesProvider);
+    final index = _tabController?.index ?? 0;
+    if (index < 0 || index >= categories.length) return;
+    if (_tabController?.indexIsChanging ?? false) {
+      _scrollToCategory(categories[index]);
     }
   }
 
-  void _scrollToCategory(ItemCategory cat) {
-    final key = _categoryKeys[cat];
+  void _scrollToCategory(MenuCategory category) {
+    final key = _categoryKeys[category.id];
     if (key != null && key.currentContext != null) {
       _isProgrammaticScroll = true;
       Scrollable.ensureVisible(
@@ -92,16 +120,16 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
   void _handleScroll() {
     if (_isProgrammaticScroll) return;
 
-    for (int i = 0; i < ItemCategory.values.length; i++) {
-      final cat = ItemCategory.values[i];
-      final key = _categoryKeys[cat];
+    final categories = ref.read(menuCategoriesProvider);
+    for (int i = 0; i < categories.length; i++) {
+      final key = _categoryKeys[categories[i].id];
       if (key?.currentContext != null) {
         final renderObj = key!.currentContext!.findRenderObject();
         if (renderObj is RenderBox) {
           final position = renderObj.localToGlobal(Offset.zero);
           if (position.dy >= 80 && position.dy <= 260) {
-            if (_tabController.index != i) {
-              _tabController.animateTo(i);
+            if (_tabController?.index != i) {
+              _tabController?.animateTo(i);
             }
             break;
           }
@@ -111,16 +139,14 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    _scrollController.dispose();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final locationState = ref.watch(locationProvider);
+    // Real categories from the `categories` table, ordered by sort_order.
+    final categories = ref.watch(menuCategoriesProvider);
+    _syncTabController(categories);
+    for (final category in categories) {
+      _categoryKeys.putIfAbsent(category.id, GlobalKey.new);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -243,7 +269,9 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                 fontSize: 13.5,
                 letterSpacing: -0.2,
               ),
-              tabs: ItemCategory.values.map((cat) => Tab(text: cat.label)).toList(),
+              tabs: categories
+                  .map((category) => Tab(text: category.name))
+                  .toList(),
             ),
           ),
         ),
@@ -439,25 +467,38 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
   }
 }
 
-String _getCategoryBannerUrl(ItemCategory cat) {
-  switch (cat) {
-    case ItemCategory.classics:
-      return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.specials:
-      return 'https://images.unsplash.com/photo-1595708684082-a173bb3a06c5?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.burgers:
-      return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.shawarmas:
-      return 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.desserts:
-      return 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.deals:
-      return 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.sides:
-      return 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=800&q=85';
-    case ItemCategory.drinks:
-      return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=85';
+/// Picks a banner image for a category by what its name contains.
+///
+/// The `categories` table has no image column, so the banner is chosen from a
+/// small themed set. This is a presentation choice only — the category heading
+/// and the items under it always come from the database, so an unrecognised
+/// name still gets a real section, just with the neutral fallback art.
+String _getCategoryBannerUrl(MenuCategory category) {
+  const banners = <String, String>{
+    'pizza': 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=85',
+    'burger': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=85',
+    'wrap': 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85',
+    'shawarma': 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85',
+    'chicken': 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=800&q=85',
+    'chinese': 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85',
+    'handi': 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85',
+    'steak': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=85',
+    'pasta': 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?auto=format&fit=crop&w=800&q=85',
+    'sandwich': 'https://images.unsplash.com/photo-1529006557810-274b9b2fc783?auto=format&fit=crop&w=800&q=85',
+    'dessert': 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=85',
+    'drink': 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=85',
+    'beverage': 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=85',
+    'side': 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=800&q=85',
+    'starter': 'https://images.unsplash.com/photo-1541745537411-b8046dc6d66c?auto=format&fit=crop&w=800&q=85',
+    'deal': 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=85',
+    'offer': 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=800&q=85',
+  };
+
+  final name = category.name.toLowerCase();
+  for (final entry in banners.entries) {
+    if (name.contains(entry.key)) return entry.value;
   }
+  return 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=800&q=85';
 }
 
 /// Per-category catalog slivers. A [ConsumerWidget] so that only this section
@@ -466,22 +507,23 @@ String _getCategoryBannerUrl(ItemCategory cat) {
 class _MenuCatalogSection extends ConsumerWidget {
   const _MenuCatalogSection({required this.categoryKeys});
 
-  final Map<ItemCategory, GlobalKey> categoryKeys;
+  final Map<String, GlobalKey> categoryKeys;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
-    final allItems =
-        ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
+    final categories = ref.watch(menuCategoriesProvider);
+    final catalog = ref.watch(menuCatalogProvider).value ?? MenuRepository.mockCatalog;
 
     return SliverMainAxisGroup(
       slivers: <Widget>[
-        ...ItemCategory.values.expand((cat) {
-          final categoryItems = allItems.where((item) {
-            final matchesCat = item.category == cat;
-            final matchesQuery = searchQuery.isEmpty ||
-                item.title.toLowerCase().contains(searchQuery);
-            return matchesCat && matchesQuery;
+        ...categories.expand((category) {
+          // Items come from the category's own `category_id`, which is what
+          // makes each section show the food that actually belongs to it.
+          final categoryItems = catalog.itemsIn(category.id).where((item) {
+            return searchQuery.isEmpty ||
+                item.title.toLowerCase().contains(searchQuery) ||
+                item.description.toLowerCase().contains(searchQuery);
           }).toList();
 
           if (categoryItems.isEmpty) return const <Widget>[];
@@ -489,10 +531,10 @@ class _MenuCatalogSection extends ConsumerWidget {
           return [
             SliverToBoxAdapter(
               child: Container(
-                key: categoryKeys[cat],
+                key: categoryKeys[category.id],
                 child: CategoryHeroCard(
-                  category: cat,
-                  bannerImageUrl: _getCategoryBannerUrl(cat),
+                  category: category,
+                  bannerImageUrl: _getCategoryBannerUrl(category),
                 ),
               ),
             ),

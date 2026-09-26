@@ -21,6 +21,7 @@ final locationRepositoryProvider = Provider<LocationRepository>((ref) {
   return LocationRepository(
     deviceSource: GeolocatorDeviceLocationSource(),
     addressLookup: lookup,
+    coordinateLookup: lookup,
   );
 });
 
@@ -63,6 +64,27 @@ class LocationState {
   /// True when a GPS pin is available, which is what nearest-branch matching
   /// needs before it can honestly call a branch the closest one.
   bool get hasCoordinates => latitude != null && longitude != null;
+
+  LocationState copyWith({
+    String? address,
+    bool? isSet,
+    double? latitude,
+    double? longitude,
+    bool? isCapturing,
+    String? errorMessage,
+    bool? settingsMustBeOpened,
+  }) {
+    return LocationState(
+      address: address ?? this.address,
+      isSet: isSet ?? this.isSet,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      isCapturing: isCapturing ?? this.isCapturing,
+      errorMessage: errorMessage ?? this.errorMessage,
+      settingsMustBeOpened:
+          settingsMustBeOpened ?? this.settingsMustBeOpened,
+    );
+  }
 }
 
 /// Owns the customer's current location for the app session.
@@ -80,8 +102,25 @@ class LocationNotifier extends StateNotifier<LocationState> {
   /// Any earlier pin is dropped: coordinates from a previous capture describe
   /// somewhere else, and keeping them would make the app match the branch to
   /// the wrong place.
-  void setLocation(String newAddress) {
-    state = LocationState(address: newAddress, isSet: true);
+  ///
+  /// The typed text is stored immediately, then geocoded. Geocoding only runs
+  /// to work out the closest branch, so a miss leaves the customer with the
+  /// address they typed and no pin rather than an error — [LocationState]
+  /// carries no geocoding failure, because nothing actually broke for them.
+  Future<void> setLocation(String newAddress) async {
+    final trimmed = newAddress.trim();
+    state = LocationState(address: trimmed, isSet: true);
+    if (trimmed.isEmpty) return;
+
+    state = state.copyWith(isCapturing: true);
+    final coordinates = await repository.geocodeAddressText(trimmed);
+    if (!state.isSet || state.address != trimmed) return;
+
+    state = state.copyWith(
+      latitude: coordinates?.latitude,
+      longitude: coordinates?.longitude,
+      isCapturing: false,
+    );
   }
 
   /// Applies one of the customer's saved addresses, keeping the coordinates

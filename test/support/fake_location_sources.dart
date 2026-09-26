@@ -43,3 +43,21 @@ class FakeAddressTextLookup implements AddressTextLookup {
     return result;
   }
 }
+
+/// Stands in for OpenStreetMap forward geocoding: typed address text in,
+/// coordinates out, so checkout can work out the closest branch.
+class FakeForwardGeocoder implements AddressCoordinateLookup {
+  CapturedCoordinates? coordinates;
+  Object? error;
+  final List<String> queries = [];
+
+  FakeForwardGeocoder({this.coordinates, this.error});
+
+  @override
+  Future<CapturedCoordinates?> lookupCoordinates(String query) async {
+    queries.add(query);
+    final failure = error;
+    if (failure != null) throw failure;
+    return coordinates;
+  }
+}

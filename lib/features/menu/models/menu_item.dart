@@ -1,46 +1,4 @@
-enum ItemCategory {
-  classics('Flaming Classics'),
-  specials('Flaming Specials'),
-  burgers('Juicy Burgers'),
-  shawarmas('Shawarmas'),
-  desserts('Desserts'),
-  deals('Deals & Offers'),
-  sides('Sides & Starters'),
-  drinks('Beverages');
-
-  final String label;
-  const ItemCategory(this.label);
-
-  /// Maps a DB `category` value (enum name or label, any casing) to a
-  /// category. Unknown values fall back to [classics] so rows stay visible.
-  static ItemCategory fromDb(Object? value) {
-    if (value == null) return ItemCategory.classics;
-    final s = value.toString().trim().toLowerCase();
-    for (final c in ItemCategory.values) {
-      if (c.name == s || c.label.toLowerCase() == s) return c;
-    }
-    const aliases = <String, ItemCategory>{
-      'classic': ItemCategory.classics,
-      'flaming classic': ItemCategory.classics,
-      'special': ItemCategory.specials,
-      'flaming special': ItemCategory.specials,
-      'burger': ItemCategory.burgers,
-      'shawarma': ItemCategory.shawarmas,
-      'dessert': ItemCategory.desserts,
-      'deal': ItemCategory.deals,
-      'offer': ItemCategory.deals,
-      'offers': ItemCategory.deals,
-      'deals & offers': ItemCategory.deals,
-      'side': ItemCategory.sides,
-      'starter': ItemCategory.sides,
-      'starters': ItemCategory.sides,
-      'sides & starters': ItemCategory.sides,
-      'drink': ItemCategory.drinks,
-      'beverage': ItemCategory.drinks,
-    };
-    return aliases[s] ?? ItemCategory.classics;
-  }
-}
+import 'menu_category.dart';
 
 enum PizzaSize {
   small('Small 8"', 1.0, 'Serves 1'),
@@ -94,7 +52,15 @@ class MenuItem {
   final double basePrice;
   final double? originalPrice;
   final String imageUrl;
-  final ItemCategory category;
+
+  /// The `menu_items.category_id` foreign key, or null when the row has none.
+  final String? categoryId;
+
+  /// The real category name from the `categories` table, empty when the row
+  /// has no category or the category row could not be found. Never invented:
+  /// a wrong heading is worse than an honest blank.
+  final String categoryName;
+
   final double rating;
   final int reviewCount;
   final String prepTime;
@@ -111,7 +77,8 @@ class MenuItem {
     required this.basePrice,
     this.originalPrice,
     required this.imageUrl,
-    required this.category,
+    this.categoryId,
+    this.categoryName = '',
     this.rating = 4.8,
     this.reviewCount = 120,
     this.prepTime = '15-20 min',
@@ -123,9 +90,21 @@ class MenuItem {
   });
 
   /// Builds a MenuItem from a Supabase `menu_items` row. Column spellings are
-  /// resolved tolerantly (title/name, base_price/price, image_url/image, …)
-  /// so the mapping keeps working as the table evolves.
-  factory MenuItem.fromMap(Map<String, dynamic> map) {
+  /// resolved tolerantly (name/title, price/base_price, image_url/image, …) so
+  /// the mapping keeps working as the table evolves.
+  ///
+  /// The category comes from `category_id`, never from a `category` column —
+  /// that column does not exist, and reading it silently put all 88 items under
+  /// one heading. [categoriesById] resolves the id to a name; when the row
+  /// carries an embedded `categories` object that wins, so a single joined
+  /// query is enough.
+  factory MenuItem.fromMap(
+    Map<String, dynamic> map, {
+    Map<String, MenuCategory> categoriesById = const {},
+  }) {
+    final rawCategoryId = map['category_id'] ?? map['categoryId'];
+    final categoryId = rawCategoryId?.toString();
+
     return MenuItem(
       id: _asString(map['id'] ?? map['menu_item_id']),
       title: _asString(map['title'] ?? map['name'], fallback: 'Unnamed item'),
@@ -137,7 +116,10 @@ class MenuItem {
       imageUrl: _asString(
         map['image_url'] ?? map['image'] ?? map['imageurl'],
       ),
-      category: ItemCategory.fromDb(map['category']),
+      categoryId: (categoryId == null || categoryId.isEmpty)
+          ? null
+          : categoryId,
+      categoryName: _resolveCategoryName(map, categoryId, categoriesById),
       rating: _asDouble(map['rating'] ?? 4.8),
       reviewCount: _asInt(map['review_count'] ?? map['reviews'] ?? 120),
       prepTime: _asString(map['prep_time'], fallback: '15-20 min'),
@@ -147,6 +129,22 @@ class MenuItem {
       isBestseller:
           map['is_bestseller'] == true || map['is_best_seller'] == true,
     );
+  }
+
+  /// Reads the category name from the embedded `categories` object when the
+  /// query joined it, otherwise from the separately fetched category list.
+  static String _resolveCategoryName(
+    Map<String, dynamic> map,
+    String? categoryId,
+    Map<String, MenuCategory> categoriesById,
+  ) {
+    final embedded = map['categories'];
+    if (embedded is Map<String, dynamic>) {
+      final name = (embedded['name'] ?? '').toString().trim();
+      if (name.isNotEmpty) return name;
+    }
+    if (categoryId == null) return '';
+    return categoriesById[categoryId]?.name ?? '';
   }
 }
 

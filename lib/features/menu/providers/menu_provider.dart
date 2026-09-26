@@ -1,37 +1,54 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../data/menu_catalog.dart';
 import '../data/menu_repository.dart';
+import '../models/menu_category.dart';
 import '../models/menu_item.dart';
 
-// Selected Category Provider
-final selectedCategoryProvider = StateProvider<ItemCategory?>((ref) => null);
+// The category the customer is browsing, as a `categories.id`. Null means the
+// "All" tab, which shows every item rather than one section.
+final selectedCategoryIdProvider = StateProvider<String?>((ref) => null);
 
 // Search Query Provider
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
-// Repository + live menu catalog (Supabase `menu_items` with mock fallback).
+// Repository + live menu catalog (Supabase `categories` + `menu_items`).
 final menuRepositoryProvider =
     Provider<MenuRepository>((ref) => MenuRepository());
 
-/// The full menu catalog. Waiting/error states surface the bundled mock
-/// catalog so screens always have items to render.
-final menuFutureProvider = FutureProvider<List<MenuItem>>((ref) {
-  return ref.watch(menuRepositoryProvider).fetchMenuItems();
+/// The real menu: the `categories` rows joined to the `menu_items` rows that
+/// point at them. Falls back to the bundled offline catalog so screens always
+/// have something to render.
+final menuCatalogProvider = FutureProvider<MenuCatalog>((ref) {
+  return ref.watch(menuRepositoryProvider).fetchMenuCatalog();
+});
+
+/// The category tabs, in the order the restaurant arranged them.
+final menuCategoriesProvider = Provider<List<MenuCategory>>((ref) {
+  return ref.watch(menuCatalogProvider).value?.categories ??
+      MenuRepository.mockCategories;
+});
+
+/// Every item, for screens that show everything (favourites, search-all).
+final allMenuItemsProvider = Provider<List<MenuItem>>((ref) {
+  return ref.watch(menuCatalogProvider).value?.allItems ??
+      MenuRepository.mockCatalog.allItems;
 });
 
 // Filtered Menu Items Provider
 final filteredMenuItemsProvider = Provider<List<MenuItem>>((ref) {
-  final category = ref.watch(selectedCategoryProvider);
+  final categoryId = ref.watch(selectedCategoryIdProvider);
   final query = ref.watch(searchQueryProvider).trim().toLowerCase();
-  final items =
-      ref.watch(menuFutureProvider).value ?? MenuRepository.mockMenuItems;
+  final catalog = ref.watch(menuCatalogProvider).value ?? MenuRepository.mockCatalog;
 
-  return items.where((item) {
-    final matchesCategory = category == null || item.category == category;
-    final matchesQuery = query.isEmpty ||
-        item.title.toLowerCase().contains(query) ||
-        item.description.toLowerCase().contains(query);
-    return matchesCategory && matchesQuery;
-  }).toList();
+  final pool = categoryId == null ? catalog.allItems : catalog.itemsIn(categoryId);
+  if (query.isEmpty) return pool;
+
+  return pool
+      .where((item) =>
+          item.title.toLowerCase().contains(query) ||
+          item.description.toLowerCase().contains(query) ||
+          item.categoryName.toLowerCase().contains(query))
+      .toList();
 });
 
 // Favorite Items Provider

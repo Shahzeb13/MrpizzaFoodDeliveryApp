@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
@@ -12,6 +13,7 @@ import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../profile/models/profile.dart';
+import '../../profile/providers/address_selection_provider.dart';
 import '../../profile/providers/profile_provider.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -39,17 +41,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   /// Applies the sensible defaults once the address/branch data is available:
+  /// - The map pin picked on the home screen decides the branch, because it is
+  ///   a position the customer actually chose.
   /// - Delivery: default address + nearer branch.
   /// - Pickup: first branch (only when nothing pre-selected yet).
   void _syncCheckout() {
     final addresses = ref.read(addressesFutureProvider).value ?? const [];
     final branches = _loadedBranches;
     final notifier = ref.read(checkoutProvider.notifier);
+    final pin = ref.read(locationProvider);
+
+    // The pin is the strongest signal available and needs no saved address row,
+    // so it goes first. A hand-picked branch is left alone by this call.
+    if (pin.hasCoordinates && branches.isNotEmpty) {
+      notifier.syncBranchFromPin(
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+        branches: branches,
+      );
+    }
+
     final checkout = ref.read(checkoutProvider);
 
     if (checkout.orderType == OrderType.pickup) {
       if (checkout.branch == null && branches.isNotEmpty) {
-        notifier.selectBranch(branches.first);
+        notifier.selectBranchAutomatically(branches.first);
       }
       return;
     }
@@ -67,14 +83,138 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final addresses = ref.read(addressesFutureProvider).value ?? const [];
     final branches = _loadedBranches;
     final notifier = ref.read(checkoutProvider.notifier);
+    final pin = ref.read(locationProvider);
 
     if (type == OrderType.pickup) {
       notifier.selectPickup(branches: branches);
     } else {
       notifier.selectDeliveryDefault(addresses: addresses, branches: branches);
     }
+
+    if (pin.hasCoordinates && branches.isNotEmpty) {
+      notifier.syncBranchFromPin(
+        latitude: pin.latitude,
+        longitude: pin.longitude,
+        branches: branches,
+      );
+    }
   }
 
+  /// "Use where I am now" row at the top of the address picker.
+  ///
+  /// Tapping it captures the position, stores it, and applies it to the order in
+  /// one go, so the customer never has to open a form to say where they are.
+  Widget _buildCurrentLocationRow(
+    BuildContext sheetContext,
+    LocationState location,
+    List<Branch> branches,
+  ) {
+    final hasPin = location.hasCoordinates;
+    final isSelected = hasPin && ref.read(checkoutProvider).address == null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          if (!hasPin) {
+            await ref.read(locationProvider.notifier).useCurrentLocation();
+            if (!mounted) return;
+            final captured = ref.read(locationProvider);
+            final failure = captured.errorMessage;
+            if (failure != null) {
+              _showMessage(failure, isError: true);
+              return;
+            }
+          }
+
+          // Store it, then select the stored address. Persisting first means the
+          // order references a real address row and the choice is remembered.
+          SaveLocationResult? saved;
+          try {
+            saved = await ref.read(saveCurrentLocationProvider)();
+          } catch (_) {
+            // Fall back to the raw pin so checkout is never blocked by a
+            // storage failure.
+          }
+
+          if (!mounted) return;
+          if (saved != null) {
+            ref
+                .read(checkoutProvider.notifier)
+                .selectAddress(saved.address, branches: branches);
+          } else if (hasPin) {
+            ref.read(checkoutProvider.notifier).syncBranchFromPin(
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  branches: branches,
+                );
+          }
+
+          if (!mounted) return;
+          // The sheet's own context can be torn down independently of this State,
+          // so it gets its own mounted check before being used.
+          if (!sheetContext.mounted) return;
+          Navigator.of(sheetContext).pop();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.primaryTint,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : AppColors.primaryLight,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              const MrIconWell(
+                icon: Icons.my_location_rounded,
+                size: 18,
+                color: AppColors.primary,
+                background: AppColors.surface,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Use my current location',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasPin
+                          ? (location.address.isEmpty
+                              ? 'Pinned on the map'
+                              : location.address)
+                          : 'Tap to drop a pin and save it',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Lets the customer choose where the order goes: their current position as
+  /// one tap, or any of the addresses already on file.
   void _showAddressPicker(List<UserAddress> addresses) {
     final branches = _loadedBranches;
 
@@ -87,6 +227,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
       builder: (sheetContext) {
         final selectedId = ref.read(checkoutProvider).address?.id;
+        final location = ref.watch(locationProvider);
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -105,13 +246,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Text(
-                  'Select Delivery Address',
+                  'Deliver To',
                   style: TextStyle(
                     fontFamily: AppTheme.fontFamily,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.3,
                     color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              // Where you are right now, offered as one tap. Choosing it stores
+              // the location, so it also joins the saved list below.
+              _buildCurrentLocationRow(sheetContext, location, branches),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                child: Text(
+                  addresses.isEmpty
+                      ? 'No saved addresses yet'
+                      : 'SAVED ADDRESSES',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: AppColors.textLight,
                   ),
                 ),
               ),
@@ -206,6 +365,128 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  /// Returns the branch this order should be placed against, or null when the
+  /// customer still has to choose and the order must not be placed yet.
+  ///
+  /// `orders.branch_id` is NOT NULL, so an order cannot exist without a branch.
+  /// There is therefore no path here that leaves the customer stuck: the pin and
+  /// the saved address are both tried first, a single-branch restaurant is
+  /// routed automatically, and only a genuine choice between several branches
+  /// asks the customer.
+  Branch? _resolveBranchOrAskCustomer(CheckoutState checkout) {
+    if (checkout.branch == null) {
+      _syncCheckout();
+      checkout = ref.read(checkoutProvider);
+    }
+
+    final resolved = checkout.branch;
+    if (resolved != null) return resolved;
+
+    final branches = _loadedBranches;
+    if (branches.isEmpty) {
+      _showMessage('No branches are available right now.', isError: true);
+      return null;
+    }
+    if (branches.length == 1) {
+      ref
+          .read(checkoutProvider.notifier)
+          .selectBranchAutomatically(branches.first);
+      return ref.read(checkoutProvider).branch ?? branches.first;
+    }
+
+    _showBranchPickerSheet(branches);
+    return null;
+  }
+
+  /// Asks which branch to use when none could be worked out from the customer's
+  /// position. Never leaves the order in a failed state — the customer taps a
+  /// branch and confirms again.
+  void _showBranchPickerSheet(List<Branch> branches) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Choose your branch',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'We could not work out the closest branch from your location.',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...branches.map(
+                  (branch) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        ref.read(checkoutProvider.notifier).selectBranch(branch);
+                        Navigator.pop(sheetContext);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.storefront_rounded,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              branch.name,
+                              style: const TextStyle(
+                                fontFamily: AppTheme.fontFamily,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _confirmOrder({
     required CartState cart,
     required CheckoutState checkout,
@@ -215,27 +496,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
 
-    // If branch hasn't auto-resolved yet (async), try to resolve it now.
-    var resolvedCheckout = checkout;
-    if (checkout.branch == null) {
-      final branches = _loadedBranches;
-      final addresses = ref.read(addressesFutureProvider).value ?? const [];
-      final notifier = ref.read(checkoutProvider.notifier);
-      if (checkout.orderType == OrderType.pickup && branches.isNotEmpty) {
-        notifier.selectBranch(branches.first);
-      } else if (checkout.address != null && branches.isNotEmpty) {
-        notifier.selectAddress(checkout.address!, branches: branches);
-      } else if (addresses.isNotEmpty && branches.isNotEmpty) {
-        notifier.selectDeliveryDefault(addresses: addresses, branches: branches);
-      }
-      resolvedCheckout = ref.read(checkoutProvider);
-    }
+    final branch = _resolveBranchOrAskCustomer(checkout);
+    if (branch == null) return;
+    final resolvedCheckout = ref.read(checkoutProvider);
 
-    final branch = resolvedCheckout.branch;
-    if (branch == null) {
-      _showMessage('Please select a branch first.');
-      return;
-    }
     if (resolvedCheckout.isDelivery && resolvedCheckout.address == null) {
       _showMessage('Please select a delivery address.');
       return;
@@ -322,6 +586,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     ref.listen(addressesFutureProvider, (previous, next) => _syncCheckout());
     ref.listen(branchesFutureProvider, (previous, next) => _syncCheckout());
+    // A location picked on the home screen decides the branch, so the branch
+    // has to be reworked out whenever that pin changes.
+    ref.listen(locationProvider, (previous, next) => _syncCheckout());
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -448,7 +715,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           _buildOrderTypeSection(checkout),
           const SizedBox(height: 20),
           if (checkout.isDelivery)
-            ..._buildDeliverySection(addressesAsync, checkout)
+            ..._buildDeliverySection(addressesAsync, branchesAsync, checkout)
           else
             ..._buildPickupSection(branchesAsync, checkout),
           const SizedBox(height: 20),
@@ -706,6 +973,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   List<Widget> _buildDeliverySection(
     AsyncValue<List<UserAddress>> addressesAsync,
+    AsyncValue<BranchCatalog> branchesAsync,
     CheckoutState checkout,
   ) {
     if (addressesAsync.isLoading) {
@@ -735,7 +1003,53 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         const SizedBox(height: 12),
         _branchNote(checkout),
       ],
+      // The branch is worked out automatically, but the customer must still be
+      // able to see it, and change it when the automatic pick is wrong.
+      if (checkout.branch == null && branchesAsync.value != null) ...[
+        const SizedBox(height: 12),
+        _unresolvedBranchCard(),
+      ],
     ];
+  }
+
+  /// Shown when no branch could be worked out. Tapping it opens the same picker
+  /// Confirm Order uses, so the screen is never a dead end.
+  Widget _unresolvedBranchCard() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () => _showBranchPickerSheet(_loadedBranches),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.primaryTint,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.primaryLight, width: 1.5),
+        ),
+        child: const Row(
+          children: [
+            MrIconWell(
+              icon: Icons.storefront_rounded,
+              size: 18,
+              color: AppColors.primary,
+              background: AppColors.surface,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Choose the branch that will cook your order',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textLight),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _deliveryAddressCard(List<UserAddress> addresses, CheckoutState checkout) {

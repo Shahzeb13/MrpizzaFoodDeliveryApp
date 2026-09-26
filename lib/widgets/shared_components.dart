@@ -4,9 +4,12 @@ import '../core/providers/location_provider.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
+import '../features/menu/data/menu_repository.dart';
+import '../features/menu/models/menu_category.dart';
 import '../features/menu/models/menu_item.dart';
 import '../features/menu/providers/menu_provider.dart';
 import '../features/profile/models/profile.dart';
+import '../features/profile/providers/address_selection_provider.dart';
 import '../features/profile/providers/profile_provider.dart';
 
 /// Top Floating Toast Notification for Cart Actions (Doesn't block bottom checkout bar)
@@ -381,7 +384,7 @@ class PizzaCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _ItemTag(
-                        text: item.category.label.toUpperCase(),
+                        text: item.categoryName.toUpperCase(),
                         color: AppColors.textLight,
                       ),
                       const SizedBox(height: 5),
@@ -435,7 +438,7 @@ class PizzaCard extends ConsumerWidget {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(19),
                         child: Image.network(
-                          item.imageUrl,
+                          MenuRepository.resolveImageUrl(item.imageUrl),
                           width: 86,
                           height: 86,
                           fit: BoxFit.cover,
@@ -468,7 +471,7 @@ class PizzaCard extends ConsumerWidget {
 
 /// HD Category Section Header Banner (editorial cover-card)
 class CategoryHeroCard extends StatelessWidget {
-  final ItemCategory category;
+  final MenuCategory category;
   final String bannerImageUrl;
 
   const CategoryHeroCard({
@@ -477,25 +480,41 @@ class CategoryHeroCard extends StatelessWidget {
     required this.bannerImageUrl,
   });
 
+  /// A short line under the category name.
+  ///
+  /// The menu used to be described by a hardcoded eight-value enum, so this was
+  /// an exhaustive switch. The restaurant really runs fifteen categories and
+  /// adds more over time, so the line is chosen by what the name contains and
+  /// falls back to something honest rather than to a wrong guess.
   String get categoryTagline {
-    switch (category) {
-      case ItemCategory.classics:
-        return 'Authentic hand-crafted pizzas';
-      case ItemCategory.specials:
-        return 'Chef signature stuffed crusts';
-      case ItemCategory.burgers:
-        return 'Flame-grilled & crispy delights';
-      case ItemCategory.shawarmas:
-        return 'Authentic Arabian & zesty wraps';
-      case ItemCategory.desserts:
-        return 'Sweet molten cakes & brownies';
-      case ItemCategory.deals:
-        return 'Exclusive multi-item combo bundles';
-      case ItemCategory.sides:
-        return 'Crispy garlic knots & wings';
-      case ItemCategory.drinks:
-        return 'Ice-cold sodas, shakes & frozen';
+    final name = category.name.toLowerCase();
+    if (name.contains('deal') || name.contains('offer') || name.contains('free')) {
+      return 'Limited-time bundles and combos';
     }
+    if (name.contains('pizza')) return 'Hand-tossed, baked fresh to order';
+    if (name.contains('burger')) return 'Flame-grilled & crispy delights';
+    if (name.contains('wrap') || name.contains('roll') || name.contains('shawarma')) {
+      return 'Rolled fresh with signature sauces';
+    }
+    if (name.contains('chicken') || name.contains('wing')) {
+      return 'Crispy, hot and full of flavour';
+    }
+    if (name.contains('chinese') || name.contains('handi')) {
+      return 'Wok-tossed with bold spices';
+    }
+    if (name.contains('steak')) return 'Seared and served sizzling';
+    if (name.contains('pasta')) return 'Creamy, saucy, comfort on a plate';
+    if (name.contains('sandwich')) return 'Stacked fresh between soft bread';
+    if (name.contains('dessert') || name.contains('cake') || name.contains('brownie')) {
+      return 'Sweet treats to finish the meal';
+    }
+    if (name.contains('drink') || name.contains('beverage') || name.contains('shake')) {
+      return 'Ice-cold pours and frozen blends';
+    }
+    if (name.contains('side') || name.contains('starter')) {
+      return 'Share it before the main arrives';
+    }
+    return 'Fresh from the Mr. Pizza kitchen';
   }
 
   @override
@@ -557,7 +576,7 @@ class CategoryHeroCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      category.label.toUpperCase(),
+                      category.name.toUpperCase(),
                       style: const TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         color: Color(0xFF7A5414),
@@ -647,7 +666,7 @@ class GridItemCard extends ConsumerWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(13),
                     child: Image.network(
-                      item.imageUrl,
+                      MenuRepository.resolveImageUrl(item.imageUrl),
                       height: 108,
                       width: double.infinity,
                       fit: BoxFit.cover,
@@ -958,7 +977,7 @@ class _CustomizationBottomSheetState
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.network(
-                                widget.item.imageUrl,
+                                MenuRepository.resolveImageUrl(widget.item.imageUrl),
                                 width: 72,
                                 height: 72,
                                 fit: BoxFit.cover,
@@ -1282,6 +1301,7 @@ class _LocationSelectionDialogState
   final _addressController = TextEditingController();
   UserAddress? _selectedSaved;
   bool _isLocating = false;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -1289,18 +1309,39 @@ class _LocationSelectionDialogState
     super.dispose();
   }
 
-  void _select() {
+  /// Applies the choice to the app and stores it, so My Addresses and checkout
+  /// both know about it immediately.
+  ///
+  /// A saved address is already stored, so it only needs applying. A typed or
+  /// GPS-captured one is written to the `addresses` table here — previously it
+  /// lived in memory only, which is why the address list stayed empty.
+  Future<void> _select() async {
     final entered = _addressController.text.trim();
-    final notifier = ref.read(locationProvider.notifier);
 
-    if (entered.isNotEmpty) {
-      notifier.setLocation(entered);
-      Navigator.pop(context);
-    } else if (_selectedSaved != null) {
+    if (entered.isEmpty && _selectedSaved == null) return;
+    setState(() => _isSaving = true);
+
+    final locationNotifier = ref.read(locationProvider.notifier);
+
+    if (_selectedSaved != null) {
       // Keep the stored pin so checkout can name the closest branch.
-      notifier.applySavedAddress(_selectedSaved!);
-      Navigator.pop(context);
+      locationNotifier.applySavedAddress(_selectedSaved!);
+    } else if (entered.isNotEmpty) {
+      // setLocation geocodes first so the branch can be worked out; it stores
+      // the text immediately, so the save below can rely on the text being set.
+      await locationNotifier.setLocation(entered);
     }
+
+    if (!mounted) return;
+    try {
+      await ref.read(saveCurrentLocationProvider)();
+    } catch (_) {
+      // A failed save must not block the customer from choosing where to eat.
+      // The location is still applied, and the address screen can retry.
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   Future<void> _useCurrentLocation() async {
@@ -1316,6 +1357,16 @@ class _LocationSelectionDialogState
       // Stay open so the customer can read the problem and type an address.
       return;
     }
+
+    // Store the captured position straight away, the same as a typed choice, so
+    // it is waiting in My Addresses and at checkout.
+    if (!mounted) return;
+    try {
+      await ref.read(saveCurrentLocationProvider)();
+    } catch (_) {
+      // Not being able to store it must not stop the customer ordering.
+    }
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -1460,7 +1511,7 @@ class _LocationSelectionDialogState
                 width: double.infinity,
                 height: 52,
                 child: FilledButton(
-                  onPressed: _select,
+                  onPressed: (_isSaving || _isLocating) ? null : _select,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -1487,6 +1538,20 @@ class _LocationSelectionDialogState
                           size: 16, color: Colors.white),
                     ],
                   ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Say plainly that confirming stores the location, so the save is
+              // not a surprise and My Addresses making sense afterwards is
+              // expected rather than mysterious.
+              const Text(
+                'Saved to your addresses so you can pick it again at checkout.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 11.5,
+                  height: 1.3,
+                  color: AppColors.textLight,
                 ),
               ),
             ],
