@@ -2,24 +2,42 @@
 import '../models/branch.dart';
 import '../models/order.dart';
 
+/// The branches the app can offer, plus whether they are real database rows or
+/// the bundled offline stand-ins.
+///
+/// The bundled branches do not have real `branches.id` UUIDs, so an order built
+/// on them would fail the `orders.branch_id` foreign key. Callers must check
+/// [usedFallbackData] and tell the user, instead of pretending the data is live.
+class BranchCatalog {
+  final List<Branch> branches;
+
+  /// True when [branches] came from [OrdersRepository.bundledBranches] rather
+  /// than from the `branches` table.
+  final bool usedFallbackData;
+
+  const BranchCatalog({required this.branches, required this.usedFallbackData});
+
+  factory BranchCatalog.bundledFallback() => const BranchCatalog(
+        branches: OrdersRepository.bundledBranches,
+        usedFallbackData: true,
+      );
+}
+
 class OrdersRepository {
-  Future<List<Branch>> fetchBranches() async {
+  Future<BranchCatalog> fetchBranches() async {
     try {
       final res = await supabase.from('branches').select();
-      final branches = (res as List)
-          .map((row) => Branch.fromMap(row as Map<String, dynamic>))
-          .toList();
-      if (branches.isEmpty) return mockBranches;
-      branches.sort((a, b) => a.name.compareTo(b.name));
-      return branches;
+      return buildBranchCatalogFromRows(
+        (res as List).cast<Map<String, dynamic>>(),
+      );
     } catch (_) {
-      return mockBranches;
+      return BranchCatalog.bundledFallback();
     }
   }
 
   /// Bundled branches used when the `branches` table is empty or unreachable,
-  /// so checkout always has a selection to offer (mirrors the menu fallback).
-  static const List<Branch> mockBranches = [
+  /// so checkout always has something to offer (mirrors the menu fallback).
+  static const List<Branch> bundledBranches = [
     Branch(
       id: 'branch_abbottabad',
       name: 'Mr. Pizza – Abbottabad',
@@ -33,6 +51,17 @@ class OrdersRepository {
       longitude: 73.1969,
     ),
   ];
+
+  /// Turns raw `branches` rows into a [BranchCatalog], falling back to the
+  /// bundled branches when the table has no rows.
+  static BranchCatalog buildBranchCatalogFromRows(
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.isEmpty) return BranchCatalog.bundledFallback();
+    final branches = rows.map(Branch.fromMap).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return BranchCatalog(branches: branches, usedFallbackData: false);
+  }
 
   /// Inserts the order header plus one `order_items` row per cart line.
   Future<void> placeOrder(Order order) async {

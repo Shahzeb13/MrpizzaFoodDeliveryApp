@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../../profile/models/profile.dart';
+
 /// A restaurant branch from the `branches` table.
 class Branch {
   final String id;
@@ -45,5 +47,57 @@ class Branch {
             math.pow(math.sin(dLon / 2), 2);
 
     return earthRadiusKm * 2 * math.asin(math.sqrt(a));
+  }
+}
+
+/// Outcome of trying to pick the branch nearest to a delivery address.
+///
+/// [isNearestToAddress] is false whenever we could not prove a branch was the
+/// closest one — either because the address has no coordinates yet, or because
+/// the branch records have no coordinates. Callers must not describe the branch
+/// as "nearest" in that case.
+class BranchSelection {
+  final Branch? branch;
+  final bool isNearestToAddress;
+
+  const BranchSelection({required this.branch, required this.isNearestToAddress});
+
+  static const BranchSelection none =
+      BranchSelection(branch: null, isNearestToAddress: false);
+
+  /// Picks the branch with the smallest straight-line distance to [address].
+  ///
+  /// Requires coordinates on both sides. When either side is missing, no
+  /// nearest branch is claimed: [branch] is left null for an unpinned address
+  /// (the customer must choose) and falls back to the first branch when only
+  /// the branch records are missing coordinates.
+  static BranchSelection selectNearestBranch(
+    UserAddress address,
+    List<Branch> branches,
+  ) {
+    if (branches.isEmpty) return none;
+
+    final addressLat = address.latitude;
+    final addressLng = address.longitude;
+    if (addressLat == null || addressLng == null) return none;
+
+    Branch? nearest;
+    var minDistance = double.infinity;
+    for (final branch in branches) {
+      final distance = branch.distanceTo(addressLat, addressLng);
+      if (distance == null) continue;
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearest = branch;
+      }
+    }
+
+    if (nearest != null) {
+      return BranchSelection(branch: nearest, isNearestToAddress: true);
+    }
+    return BranchSelection(
+      branch: branches.first,
+      isNearestToAddress: false,
+    );
   }
 }

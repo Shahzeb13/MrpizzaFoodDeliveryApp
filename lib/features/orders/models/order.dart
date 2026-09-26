@@ -73,6 +73,12 @@ class Order {
     this.status = 'confirmed',
   });
 
+  /// Row to insert into `orders` on checkout confirmation.
+  ///
+  /// `bill_serial_number` is deliberately omitted: the database fills it via
+  /// the `orders_set_bill_serial_number` trigger, which allocates the next
+  /// per-branch number atomically. The column is NOT NULL + UNIQUE, so
+  /// generating it in the app would risk collisions on simultaneous orders.
   Map<String, dynamic> toInsertMap() {
     return {
       'customer_id': customerId,
@@ -82,7 +88,7 @@ class Order {
       'status': status,
       'subtotal': totals.subtotal,
       'tax': totals.tax,
-      'delivery_fee': totals.deliveryFee,
+      'delivery_charges': totals.deliveryFee,
       'total': totals.total,
     };
   }

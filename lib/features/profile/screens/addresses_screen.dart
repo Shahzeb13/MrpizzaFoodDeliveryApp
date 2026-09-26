@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
 import '../models/profile.dart';
@@ -18,25 +18,66 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
   final _formKey = GlobalKey<FormState>();
   final _labelController = TextEditingController();
   final _addressController = TextEditingController();
-  final _latitudeController = TextEditingController();
-  final _longitudeController = TextEditingController();
+
+  /// The GPS pin for the address being composed, or null when the customer
+  /// typed the address by hand. Kept out of the text fields on purpose —
+  /// nobody should have to type coordinates.
+  double? _capturedLatitude;
+  double? _capturedLongitude;
 
   bool _saving = false;
+  bool _capturingLocation = false;
+  String? _locationError;
+  bool _settingsMustBeOpened = false;
 
   @override
   void dispose() {
     _labelController.dispose();
     _addressController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
     super.dispose();
+  }
+
+  /// Fills the address from the device GPS. Failures show a message and leave
+  /// the typed address alone, so the customer is never forced to use GPS.
+  Future<void> _useCurrentLocation(StateSetter setSheetState) async {
+    setSheetState(() {
+      _capturingLocation = true;
+      _locationError = null;
+      _settingsMustBeOpened = false;
+    });
+
+    await ref.read(locationProvider.notifier).useCurrentLocation();
+    final location = ref.read(locationProvider);
+    if (!mounted) return;
+
+    setSheetState(() {
+      _capturingLocation = false;
+      if (location.errorMessage != null) {
+        _locationError = location.errorMessage;
+        _settingsMustBeOpened = location.settingsMustBeOpened;
+        return;
+      }
+      _capturedLatitude = location.latitude;
+      _capturedLongitude = location.longitude;
+      if (location.address.isNotEmpty) {
+        _addressController.text = location.address;
+      }
+    });
+  }
+
+  Future<void> _openLocationSettings(StateSetter setSheetState) async {
+    await ref.read(locationProvider.notifier).openAppSettings();
+    if (!mounted) return;
+    setSheetState(() => _settingsMustBeOpened = false);
   }
 
   void _showAddAddressDialog() {
     _labelController.clear();
     _addressController.clear();
-    _latitudeController.clear();
-    _longitudeController.clear();
+    _capturedLatitude = null;
+    _capturedLongitude = null;
+    _locationError = null;
+    _settingsMustBeOpened = false;
 
     showModalBottomSheet(
       context: context,
@@ -103,43 +144,9 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _latitudeController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true, signed: true),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'^-?\d*\.?\d*')),
-                              ],
-                              decoration: const InputDecoration(
-                                labelText: 'Latitude (optional)',
-                                prefixIcon: Icon(Icons.explore_outlined),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _longitudeController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                      decimal: true, signed: true),
-                              inputFormatters: [
-                                FilteringTextInputFormatter.allow(
-                                    RegExp(r'^-?\d*\.?\d*')),
-                              ],
-                              decoration: const InputDecoration(
-                                labelText: 'Longitude (optional)',
-                                prefixIcon: Icon(Icons.explore_outlined),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildUseLocationButton(setSheetState),
+                      if (_locationError != null)
+                        _buildLocationError(setSheetState),
                       const SizedBox(height: 22),
                       SizedBox(
                         width: double.infinity,
@@ -161,6 +168,76 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
     );
   }
 
+  Widget _buildUseLocationButton(StateSetter setSheetState) {
+    if (_capturingLocation) {
+      return const SizedBox(
+        height: 48,
+        child: Center(
+          child: SizedBox(
+            height: 22,
+            width: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+
+    final hasPin = _capturedLatitude != null && _capturedLongitude != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _useCurrentLocation(setSheetState),
+            icon: Icon(
+              hasPin ? Icons.check_circle_rounded : Icons.my_location_rounded,
+              size: 18,
+            ),
+            label: Text(hasPin
+                ? 'Location Added — Tap to Update'
+                : 'Use My Current Location'),
+          ),
+        ),
+        if (hasPin) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Pinned at ${_capturedLatitude!.toStringAsFixed(5)}, '
+            '${_capturedLongitude!.toStringAsFixed(5)}',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildLocationError(StateSetter setSheetState) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _locationError!,
+            style: const TextStyle(color: AppColors.warning, fontSize: 13),
+          ),
+          if (_settingsMustBeOpened) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _openLocationSettings(setSheetState),
+                icon: const Icon(Icons.settings_rounded, size: 18),
+                label: const Text('Open Settings'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitNewAddress(StateSetter setSheetState) async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
@@ -175,8 +252,8 @@ class _AddressesScreenState extends ConsumerState<AddressesScreen> {
             userId: userId,
             label: _labelController.text.trim(),
             addressLine: _addressController.text.trim(),
-            latitude: double.tryParse(_latitudeController.text.trim()),
-            longitude: double.tryParse(_longitudeController.text.trim()),
+            latitude: _capturedLatitude,
+            longitude: _capturedLongitude,
           );
       ref.invalidate(addressesFutureProvider);
       if (!mounted) return;

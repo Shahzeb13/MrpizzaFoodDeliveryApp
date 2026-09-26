@@ -6,6 +6,8 @@ import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
 import '../features/menu/models/menu_item.dart';
 import '../features/menu/providers/menu_provider.dart';
+import '../features/profile/models/profile.dart';
+import '../features/profile/providers/profile_provider.dart';
 
 /// Top Floating Toast Notification for Cart Actions (Doesn't block bottom checkout bar)
 void showTopCartToast(BuildContext context, String message) {
@@ -1278,15 +1280,8 @@ class LocationSelectionDialog extends ConsumerStatefulWidget {
 class _LocationSelectionDialogState
     extends ConsumerState<LocationSelectionDialog> {
   final _addressController = TextEditingController();
-  String? _selectedSaved;
-  bool _isLoading = false;
-
-  static const _savedLocations = [
-    'COMSATS Abbottabad, Phase 2',
-    'Mansehra University Road',
-    'Shaheen Chowk, Abbottabad',
-    'Supply Bazaar, Mansehra',
-  ];
+  UserAddress? _selectedSaved;
+  bool _isLocating = false;
 
   @override
   void dispose() {
@@ -1296,160 +1291,206 @@ class _LocationSelectionDialogState
 
   void _select() {
     final entered = _addressController.text.trim();
-    final picked = _selectedSaved;
+    final notifier = ref.read(locationProvider.notifier);
+
     if (entered.isNotEmpty) {
-      ref.read(locationProvider.notifier).setLocation(entered);
+      notifier.setLocation(entered);
       Navigator.pop(context);
-    } else if (picked != null) {
-      ref.read(locationProvider.notifier).setLocation(picked);
+    } else if (_selectedSaved != null) {
+      // Keep the stored pin so checkout can name the closest branch.
+      notifier.applySavedAddress(_selectedSaved!);
       Navigator.pop(context);
     }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _isLocating = true);
+
+    await ref.read(locationProvider.notifier).useCurrentLocation();
+    if (!mounted) return;
+
+    final location = ref.read(locationProvider);
+    setState(() => _isLocating = false);
+
+    if (location.errorMessage != null) {
+      // Stay open so the customer can read the problem and type an address.
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  Future<void> _openLocationSettings() async {
+    await ref.read(locationProvider.notifier).openAppSettings();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final entries = _savedLocations
-        .where((l) => l != ref.watch(locationProvider).address)
+    final location = ref.watch(locationProvider);
+    final addresses = ref.watch(addressesFutureProvider).value ?? const [];
+    final savedAddresses = addresses
+        .where((address) => address.addressLine != location.address)
         .toList();
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       backgroundColor: AppColors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                color: AppColors.primaryTint,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.location_on_rounded,
-                color: AppColors.primary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text('Set Delivery Location', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text(
-              'We deliver hot & fresh across Abbottabad and Mansehra.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: FilledButton.icon(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        setState(() => _isLoading = true);
-                        Future.delayed(const Duration(milliseconds: 600), () {
-                          if (context.mounted) {
-                            ref
-                                .read(locationProvider.notifier)
-                                .useCurrentLocation();
-                            Navigator.pop(context);
-                          }
-                        });
-                      },
-                icon: const Icon(Icons.my_location_rounded, size: 17),
-                label: Text(
-                  _isLoading ? 'Locating…' : 'Use Current Location',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryTint,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: AppColors.primary,
+                  size: 20,
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
-            const Row(
-              children: [
-                Expanded(child: MrFadeDivider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'OR',
-                    style: TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: AppColors.textLight,
-                    ),
+              const SizedBox(height: 12),
+              Text('Set Delivery Location',
+                  style: theme.textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(
+                'We deliver hot & fresh across Abbottabad and Mansehra.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: FilledButton.icon(
+                  onPressed: _isLocating ? null : _useCurrentLocation,
+                  icon: const Icon(Icons.my_location_rounded, size: 17),
+                  label: Text(
+                    _isLocating ? 'Locating…' : 'Use Current Location',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-                Expanded(child: MrFadeDivider()),
+              ),
+              if (location.errorMessage != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  location.errorMessage!,
+                  style: const TextStyle(
+                    color: AppColors.warning,
+                    fontSize: 12.5,
+                    height: 1.35,
+                  ),
+                ),
+                if (location.settingsMustBeOpened)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _openLocationSettings,
+                      icon: const Icon(Icons.settings_rounded, size: 17),
+                      label: const Text('Open Settings'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ),
               ],
-            ),
-            const SizedBox(height: 14),
-            if (entries.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SizedBox(
+              if (savedAddresses.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Row(
+                  children: [
+                    Expanded(child: MrFadeDivider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: MrFadeDivider()),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
                   width: double.infinity,
                   height: 46,
-                  child: DropdownButtonFormField<String>(
+                  child: DropdownButtonFormField<UserAddress>(
                     initialValue: _selectedSaved,
                     hint: const Text('Saved address'),
                     isExpanded: true,
                     borderRadius: BorderRadius.circular(18),
-                    items: entries
-                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    items: savedAddresses
+                        .map(
+                          (address) => DropdownMenuItem(
+                            value: address,
+                            child: Text(
+                              address.addressLine,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
                         .toList(),
-                    onChanged: (v) => setState(() => _selectedSaved = v),
+                    onChanged: (value) => setState(() => _selectedSaved = value),
                   ),
                 ),
-              ),
-            TextField(
-              controller: _addressController,
-              decoration: const InputDecoration(
-                hintText: 'Enter address manually',
-                prefixIcon: Icon(Icons.edit_location_alt_rounded, size: 19),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: _select,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 6,
-                  shadowColor: AppColors.primary.withValues(alpha: 0.4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+              ],
+              TextField(
+                controller: _addressController,
+                decoration: const InputDecoration(
+                  hintText: 'Enter address manually',
+                  prefixIcon: Icon(Icons.edit_location_alt_rounded, size: 19),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Confirm Location',
-                      style: TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: _select,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 6,
+                    shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    SizedBox(width: 10),
-                    Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
-                  ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Confirm Location',
+                        style: TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 10),
+                      Icon(Icons.arrow_forward_rounded,
+                          size: 16, color: Colors.white),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

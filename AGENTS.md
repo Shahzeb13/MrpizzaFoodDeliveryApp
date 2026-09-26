@@ -23,6 +23,16 @@ If a task seems to require a write operation, stop and describe exactly what you
 - Safepay for payment gateway — **no official Flutter SDK exists**; integration is done via Supabase Edge Functions acting as a backend proxy to Safepay's REST API
 - <!-- fill in: maps/location package if used for delivery tracking -->
 
+## Location Capture
+- GPS only, no map picker: `geolocator` (`lib/features/location/data/geolocator_device_location_source.dart`) reads the fix; there is no Google Maps dependency.
+- Street address text comes from OpenStreetMap Nominatim (`nominatim_address_lookup.dart`) — no API key. Nominatim's usage policy requires a real contact in the User-Agent: `nominatimUserAgent` in `lib/core/providers/location_provider.dart` still has a placeholder email and **must be replaced before release**.
+- Location is optional. Permission denied / blocked / services off / GPS timeout / reverse-geocode failure must all leave manual address entry usable — never block checkout. Failures surface as `LocationCaptureException` and `LocationState.errorMessage`.
+- A reverse-geocode failure keeps the GPS pin and leaves the address text empty; a hand-typed address clears the pin (`LocationNotifier.setLocation`) so a stale pin can never match the branch to the wrong place.
+- `CheckoutState.branchIsNearest` is the only thing allowed to label a branch "nearest". `BranchSelection` returns `isNearestToAddress: false` unless both the address and the branch have coordinates. Never hardcode that word again.
+- Platform permissions already added: `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` in `android/app/src/main/AndroidManifest.xml`, `NSLocationWhenInUseUsageDescription` in `ios/Runner/Info.plist`.
+- Branch coordinates live in nullable `public.branches.latitude` / `.longitude` (added by migration `branches_add_coordinates`). Mansehra's values are a city-centre placeholder, not the real shop.
+- Do not use `OrdersRepository.bundledBranches` for anything that reaches the database — those ids are not real UUIDs and would fail the `orders.branch_id` foreign key. `BranchCatalog.usedFallbackData` exists so the UI can say so.
+
 ## Roles & Access
 - **Owner**: sees all branches
 - **Branch manager**: scoped to their own branch's orders; creates rider accounts

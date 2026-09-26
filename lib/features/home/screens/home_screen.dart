@@ -187,15 +187,19 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView> with SingleTickerPr
                       ],
                     ),
                     Text(
-                      locationState.address,
+                      locationState.address.isEmpty
+                          ? 'Choose delivery address'
+                          : locationState.address,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.2,
-                        color: AppColors.textPrimary,
+                        color: locationState.address.isEmpty
+                            ? AppColors.textLight
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ],

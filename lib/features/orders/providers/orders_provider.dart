@@ -5,7 +5,6 @@ import '../../profile/models/profile.dart';
 import '../data/orders_repository.dart';
 import '../models/branch.dart';
 import '../models/order.dart';
-
 /// Snapshot of the most recently placed order, kept alive so the tracking
 /// screen can display the real items even after the cart is cleared.
 class LastOrderSnapshot {
@@ -26,8 +25,10 @@ final lastOrderSnapshotProvider =
 final ordersRepositoryProvider =
     Provider<OrdersRepository>((ref) => OrdersRepository());
 
-/// The two restaurant branches, loaded once and used for branch selection.
-final branchesFutureProvider = FutureProvider<List<Branch>>((ref) async {
+/// The restaurant branches, loaded once and used for branch selection.
+/// Wrapped in a [BranchCatalog] so the UI can tell real database rows apart
+/// from the bundled offline fallback.
+final branchesFutureProvider = FutureProvider<BranchCatalog>((ref) async {
   return ref.watch(ordersRepositoryProvider).fetchBranches();
 });
 
@@ -37,10 +38,15 @@ class CheckoutState {
   final UserAddress? address;
   final Branch? branch;
 
+  /// True only when [branch] was proven to be the closest branch to [address].
+  /// The checkout screen must not call the branch "nearest" when this is false.
+  final bool branchIsNearest;
+
   const CheckoutState({
     this.orderType = OrderType.delivery,
     this.address,
     this.branch,
+    this.branchIsNearest = false,
   });
 
   bool get isDelivery => orderType == OrderType.delivery;
@@ -50,11 +56,13 @@ class CheckoutState {
     UserAddress? address,
     bool clearAddress = false,
     Branch? branch,
+    bool? branchIsNearest,
   }) {
     return CheckoutState(
       orderType: orderType ?? this.orderType,
       address: clearAddress ? null : (address ?? this.address),
       branch: branch ?? this.branch,
+      branchIsNearest: branchIsNearest ?? this.branchIsNearest,
     );
   }
 }
@@ -63,7 +71,8 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
   CheckoutNotifier() : super(const CheckoutState());
 
   /// Delivery: auto-selects the customer's default address (falling back to
-  /// the first saved one) and the closer branch via Haversine distance.
+  /// the first saved one) and, when that address has coordinates, the branch
+  /// with the smallest straight-line distance to it.
   void selectDeliveryDefault({
     required List<UserAddress> addresses,
     required List<Branch> branches,
@@ -78,10 +87,13 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
     final defaultAddress = addresses.any((a) => a.isDefault)
         ? addresses.firstWhere((a) => a.isDefault)
         : addresses.first;
+    final selection =
+        BranchSelection.selectNearestBranch(defaultAddress, branches);
     state = CheckoutState(
       orderType: OrderType.delivery,
       address: defaultAddress,
-      branch: nearestBranch(defaultAddress, branches),
+      branch: selection.branch,
+      branchIsNearest: selection.isNearestToAddress,
     );
   }
 
@@ -96,36 +108,25 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
 
   /// Delivery with an explicitly chosen address (address picker).
   void selectAddress(UserAddress address, {required List<Branch> branches}) {
+    final selection = BranchSelection.selectNearestBranch(address, branches);
     state = CheckoutState(
       orderType: OrderType.delivery,
       address: address,
-      branch: nearestBranch(address, branches),
+      branch: selection.branch,
+      branchIsNearest: selection.isNearestToAddress,
     );
   }
 
   void selectBranch(Branch branch) {
-    state = state.copyWith(branch: branch);
+    // A hand-picked branch is never a verified "nearest" match.
+    state = state.copyWith(branch: branch, branchIsNearest: false);
   }
 
-  /// Closer branch by straight-line distance. Addresses without coordinates
-  /// fall back to the first branch.
+  /// Closer branch by straight-line distance, or null when the address has no
+  /// coordinates yet. Prefer [BranchSelection.selectNearestBranch], which also
+  /// reports whether the pick is genuinely the nearest one.
   static Branch? nearestBranch(UserAddress address, List<Branch> branches) {
-    if (branches.isEmpty) return null;
-    final addressLat = address.latitude;
-    final addressLng = address.longitude;
-    if (addressLat == null || addressLng == null) return branches.first;
-
-    Branch? nearest;
-    var minDistance = double.infinity;
-    for (final branch in branches) {
-      final distance = branch.distanceTo(addressLat, addressLng);
-      if (distance == null) continue;
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearest = branch;
-      }
-    }
-    return nearest ?? branches.first;
+    return BranchSelection.selectNearestBranch(address, branches).branch;
   }
 }
 

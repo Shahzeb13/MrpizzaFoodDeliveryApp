@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
 import '../../menu/providers/menu_provider.dart';
+import '../../orders/data/orders_repository.dart';
 import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
 import '../../orders/providers/orders_provider.dart';
@@ -23,6 +24,12 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
 
+  /// The branches currently loaded, or an empty list before the first load.
+  /// Empty (not bundled) on purpose: inventing branches here would let an
+  /// order be placed against a branch id that does not exist in the database.
+  List<Branch> get _loadedBranches =>
+      ref.read(branchesFutureProvider).value?.branches ?? const [];
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +43,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// - Pickup: first branch (only when nothing pre-selected yet).
   void _syncCheckout() {
     final addresses = ref.read(addressesFutureProvider).value ?? const [];
-    final branches = ref.read(branchesFutureProvider).value ?? const [];
+    final branches = _loadedBranches;
     final notifier = ref.read(checkoutProvider.notifier);
     final checkout = ref.read(checkoutProvider);
 
@@ -58,7 +65,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   void _setOrderType(OrderType type) {
     final addresses = ref.read(addressesFutureProvider).value ?? const [];
-    final branches = ref.read(branchesFutureProvider).value ?? const [];
+    final branches = _loadedBranches;
     final notifier = ref.read(checkoutProvider.notifier);
 
     if (type == OrderType.pickup) {
@@ -69,7 +76,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   void _showAddressPicker(List<UserAddress> addresses) {
-    final branches = ref.read(branchesFutureProvider).value ?? const [];
+    final branches = _loadedBranches;
 
     showModalBottomSheet<void>(
       context: context,
@@ -211,7 +218,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     // If branch hasn't auto-resolved yet (async), try to resolve it now.
     var resolvedCheckout = checkout;
     if (checkout.branch == null) {
-      final branches = ref.read(branchesFutureProvider).value ?? const [];
+      final branches = _loadedBranches;
       final addresses = ref.read(addressesFutureProvider).value ?? const [];
       final notifier = ref.read(checkoutProvider.notifier);
       if (checkout.orderType == OrderType.pickup && branches.isNotEmpty) {
@@ -427,7 +434,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     CartState cart,
     CheckoutState checkout,
     AsyncValue<List<UserAddress>> addressesAsync,
-    AsyncValue<List<Branch>> branchesAsync,
+    AsyncValue<BranchCatalog> branchesAsync,
   ) {
     final totals = OrderTotals(subtotal: cart.subtotal, orderType: checkout.orderType);
 
@@ -798,6 +805,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Widget _branchNote(CheckoutState checkout) {
     final branch = checkout.branch!;
+    // Only claim "nearest" when the branch was actually proven to be the
+    // closest one to the delivery address.
+    final label = checkout.branchIsNearest
+        ? 'Delivering from ${branch.name} (nearest branch)'
+        : 'Delivering from ${branch.name}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -816,7 +828,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Delivering from ${branch.name} (nearest branch)',
+              label,
               style: const TextStyle(
                 fontFamily: AppTheme.fontFamily,
                 fontSize: 13,
@@ -879,7 +891,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   List<Widget> _buildPickupSection(
-    AsyncValue<List<Branch>> branchesAsync,
+    AsyncValue<BranchCatalog> branchesAsync,
     CheckoutState checkout,
   ) {
     return [
@@ -888,7 +900,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       branchesAsync.when(
         loading: () => _loadingBox(),
         error: (error, _) => _errorBox(() => ref.invalidate(branchesFutureProvider)),
-        data: (branches) {
+        data: (catalog) {
+          final branches = catalog.branches;
           if (branches.isEmpty) {
             return const Padding(
               padding: EdgeInsets.all(16),

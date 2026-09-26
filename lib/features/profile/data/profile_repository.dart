@@ -17,7 +17,6 @@ class ProfileRepository {
     return supabase.from('profiles').update({
       'full_name': fullName,
       'phone': phone,
-      'updated_at': DateTime.now().toIso8601String(),
     }).eq('id', userId);
   }
 
