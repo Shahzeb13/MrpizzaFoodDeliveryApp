@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
-
+// wallet
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
 
