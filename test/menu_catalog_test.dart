@@ -270,6 +270,19 @@ void main() {
     });
   });
 
+  group('an empty menu is empty, not a bundled fake one', () {
+    test('MenuCatalog.empty has no categories and no items', () {
+      expect(MenuCatalog.empty.categories, isEmpty);
+      expect(MenuCatalog.empty.allItems, isEmpty);
+      expect(MenuCatalog.empty.isEmpty, isTrue);
+    });
+
+    test('the empty catalog reports itself as empty for every section', () {
+      expect(MenuCatalog.empty.itemsIn('anything'), isEmpty);
+      expect(MenuCatalog.empty.itemsIn(null), isEmpty);
+    });
+  });
+
   group('MenuRepository relative image paths', () {
     test('turns a stored relative path into a loadable absolute URL', () {
       final absolute = MenuRepository.resolveImageUrl(

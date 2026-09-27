@@ -133,6 +133,7 @@ class MrSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final titleText = Text(title, style: theme.textTheme.headlineSmall);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -140,15 +141,21 @@ class MrSectionTitle extends StatelessWidget {
           MrEyebrow(text: eyebrow!),
           const SizedBox(height: 4),
         ],
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Text(title, style: theme.textTheme.headlineSmall),
-            ),
-            if (trailing != null) trailing!,
-          ],
-        ),
+        // Only claim the leftover width when there is a trailing widget to push
+        // away from. As a non-flex child of a Row this widget is handed an
+        // unbounded width, and an Expanded under unbounded constraints throws on
+        // every layout pass — which is what took down the rider dashboard's
+        // "Recent Deliveries" header and, through it, the whole screen.
+        if (trailing == null)
+          titleText
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(child: titleText),
+              trailing!,
+            ],
+          ),
       ],
     );
   }

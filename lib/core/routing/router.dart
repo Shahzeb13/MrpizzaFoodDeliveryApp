@@ -17,33 +17,64 @@ import '../../features/profile/screens/loyalty_points_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/support_center_screen.dart';
 import '../../features/profile/screens/wallet_screen.dart';
+import '../providers/role_provider.dart';
+import 'route_guard.dart';
 import '../../features/rider/screens/rider_screen.dart';
 
-/// Auth-driven router. Rebuilds when the auth state flips (signedIn / signedOut)
-/// so navigation from login, post-signup redirect, and token-expiry sign-out all
-/// flow through one place instead of per-screen checks.
+/// Where the app opens for a given session.
+///
+/// A signed-in user starts on the panel their `profiles.role` row selects, so
+/// a rider never lands in the customer app. Exposed as a function rather than
+/// inlined so the rule is checkable on its own.
+String initialLocationForSession({
+  required bool isAuthenticated,
+  required UserRole role,
+}) =>
+    isAuthenticated ? landingLocationForRole(role) : loginLocation;
+
+/// Auth- and role-driven router. Navigation from login, post-signup redirect,
+/// and token-expiry sign-out all flow through this one place instead of
+/// per-screen checks.
+///
+/// The starting location is the panel the `profiles.role` column selects, and
+/// [resolveAuthorizedLocation] re-checks the live session on every navigation
+/// so a rider cannot be shown the customer panel, or vice versa.
 final routerProvider = Provider<GoRouter>((ref) {
   final isAuthenticated = ref.watch(
     authStateProvider.select((s) => s.isAuthenticated && !s.isLoading),
   );
+  final role = ref.watch(roleProvider).value ?? UserRole.customer;
 
-  return GoRouter(
-    initialLocation: isAuthenticated ? '/home' : '/login',
+  final router = GoRouter(
+    initialLocation: initialLocationForSession(
+      isAuthenticated: isAuthenticated,
+      role: role,
+    ),
+    redirect: (context, state) {
+      // Read live values rather than the captured ones: the router can outlive
+      // a provider change, and the guard must reflect the current session.
+      final auth = ref.read(authStateProvider);
+      return resolveAuthorizedLocation(
+        isAuthenticated: auth.isAuthenticated && !auth.isLoading,
+        role: ref.read(roleProvider).value ?? UserRole.customer,
+        requestedLocation: state.matchedLocation,
+      );
+    },
     routes: [
       GoRoute(
-        path: '/login',
+        path: loginLocation,
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        path: '/signup',
+        path: signupLocation,
         builder: (context, state) => const SignupScreen(),
       ),
       GoRoute(
-        path: '/role_select',
+        path: roleSelectLocation,
         builder: (context, state) => const RoleSelectScreen(),
       ),
       GoRoute(
-        path: '/home',
+        path: customerLandingLocation,
         builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
@@ -87,7 +118,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CheckoutScreen(),
       ),
       GoRoute(
-        path: '/rider',
+        path: riderLandingLocation,
         builder: (context, state) => const RiderScreen(),
       ),
       GoRoute(
@@ -96,4 +127,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  ref.onDispose(router.dispose);
+  return router;
 });

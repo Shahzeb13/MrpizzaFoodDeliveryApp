@@ -48,7 +48,10 @@ class AuthNotifier extends StateNotifier<AuthStateModel> {
     _authSubscription = _repo.onAuthStateChange.listen(_onAuthChange);
 
     // Safety net: never splash forever if the initial session event misses.
-    Future.delayed(const Duration(seconds: 3), () {
+    // 500 ms is more than enough for the SDK to fire initialSession in any
+    // realistic network condition; the old 3-second guard added a guaranteed
+    // visible delay on every Hot Restart.
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (state.isInitializing) {
         _applySession(_repo.currentSession);
       }

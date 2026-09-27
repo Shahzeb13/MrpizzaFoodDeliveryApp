@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
 import '../../menu/models/menu_item.dart';
+import '../providers/order_flow_provider.dart';
 import '../providers/orders_provider.dart';
 
 class OrderTrackingScreen extends ConsumerStatefulWidget {
@@ -15,10 +16,49 @@ class OrderTrackingScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
-  int currentStep = 2;
-
   @override
   Widget build(BuildContext context) {
+    final activeOrder = ref.watch(activeDemoOrderProvider);
+    final orderId = activeOrder?.id ?? 'ORDER #MP-9842';
+    final status = activeOrder?.status ?? DemoOrderStatus.accepted;
+
+    String headline = 'Baking & On The Way!';
+    String subtitle = 'Estimated arrival in 14 minutes';
+    String estTime = '14 MIN';
+
+    switch (status) {
+      case DemoOrderStatus.pending:
+        headline = 'Order Placed & Confirmed!';
+        subtitle = 'Searching for nearest available rider...';
+        estTime = '25 MIN';
+        break;
+      case DemoOrderStatus.assigned:
+        headline = 'Rider Assigned!';
+        subtitle = '${activeOrder?.riderName ?? "Rider"} is heading to kitchen';
+        estTime = '20 MIN';
+        break;
+      case DemoOrderStatus.accepted:
+        headline = 'Baking in Wood-Fired Oven';
+        subtitle = 'Chef is baking your pizza with fresh ingredients';
+        estTime = '15 MIN';
+        break;
+      case DemoOrderStatus.pickedUp:
+        headline = 'Out for Delivery!';
+        subtitle = '${activeOrder?.riderName ?? "Rider"} is en route with your food';
+        estTime = '8 MIN';
+        break;
+      case DemoOrderStatus.completed:
+        headline = 'Delivered Hot & Fresh!';
+        subtitle = 'Delivered! +${activeOrder?.pointsEarned ?? 0} Loyalty Points Earned';
+        estTime = 'DONE';
+        break;
+      case DemoOrderStatus.rejected:
+        headline = 'Finding Another Rider...';
+        subtitle = 'Previous rider was unavailable. Reassigning nearby...';
+        estTime = '22 MIN';
+        break;
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -51,43 +91,45 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'ORDER #MP-9842',
-                            style: TextStyle(
-                              color: AppColors.accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.2,
-                              fontFamily: AppTheme.fontFamily,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              orderId,
+                              style: const TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                fontFamily: AppTheme.fontFamily,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Baking & On The Way!',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(color: Colors.white),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Estimated arrival in 14 minutes',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: AppColors.textLight),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            Text(
+                              headline,
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(color: Colors.white),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.textLight),
+                            ),
+                          ],
+                        ),
                       ),
-                      const MrDoubleBezel(
+                      MrDoubleBezel(
                         radius: 20,
-                        outerPadding: EdgeInsets.all(4),
-                        innerPadding: EdgeInsets.symmetric(
+                        outerPadding: const EdgeInsets.all(4),
+                        innerPadding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         innerColor: AppColors.surfaceDark,
                         trayColor: AppColors.primary,
                         child: Column(
                           children: [
-                            Text(
+                            const Text(
                               'EST. TIME',
                               style: TextStyle(
                                 color: AppColors.accent,
@@ -97,10 +139,10 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                                 fontFamily: AppTheme.fontFamily,
                               ),
                             ),
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
-                              '14 MIN',
-                              style: TextStyle(
+                              estTime,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -303,7 +345,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Marco Rossi',
+                          activeOrder?.riderName ?? 'Marco Rossi',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 3),
@@ -312,9 +354,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                             const Icon(Icons.star_rounded,
                                 size: 13, color: AppColors.accent),
                             const SizedBox(width: 3),
-                            Text(
-                              '4.95  |  Mr. Pizza Senior Rider',
-                              style: Theme.of(context).textTheme.bodySmall,
+                            Flexible(
+                              child: Text(
+                                activeOrder != null
+                                    ? '${activeOrder.riderRating}  |  Mr. Pizza Rider'
+                                    : '4.95  |  Mr. Pizza Senior Rider',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ),
                           ],
                         ),
@@ -329,9 +377,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                     ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                             content: Text(
-                                'Calling Rider Marco Rossi (+1 555-0192)...')),
+                                'Calling Rider ${activeOrder?.riderName ?? "Test Rider"} (${activeOrder?.riderPhone ?? "+92 300 1234567"})...')),
                       );
                     },
                   ),
@@ -342,7 +390,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                     ),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Opening Chat with Marco...')),
+                        SnackBar(
+                            content: Text(
+                                'Opening Chat with ${activeOrder?.riderName ?? "Rider"}...')),
                       );
                     },
                   ),
@@ -353,7 +403,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
             const SizedBox(height: 24),
 
             // Order Items from the placed order
-            _buildOrderItemsSection(),
+            _buildOrderItemsSection(activeOrder),
 
             const SizedBox(height: 24),
 
@@ -366,31 +416,41 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
             _buildTrackingStep(
               index: 0,
               title: 'Order Confirmed',
-              subtitle: 'Restaurant received your order at 12:45 PM',
+              subtitle: 'Restaurant received your order',
               icon: Icons.check_circle,
               isCompleted: true,
+              isCurrent: status == DemoOrderStatus.pending,
             ),
             _buildTrackingStep(
               index: 1,
               title: 'Baking in Wood-Fired Oven',
               subtitle: 'Chef is baking your pizza with fresh ingredients',
               icon: Icons.local_fire_department,
-              isCompleted: true,
+              isCompleted: status == DemoOrderStatus.accepted ||
+                  status == DemoOrderStatus.pickedUp ||
+                  status == DemoOrderStatus.completed,
+              isCurrent: status == DemoOrderStatus.assigned ||
+                  status == DemoOrderStatus.accepted,
             ),
             _buildTrackingStep(
               index: 2,
               title: 'Out for Delivery',
-              subtitle: 'Marco picked up your pizza and is on his way',
+              subtitle:
+                  '${activeOrder?.riderName ?? "Rider"} picked up your pizza and is en route',
               icon: Icons.delivery_dining,
-              isCompleted: true,
-              isCurrent: true,
+              isCompleted: status == DemoOrderStatus.pickedUp ||
+                  status == DemoOrderStatus.completed,
+              isCurrent: status == DemoOrderStatus.pickedUp,
             ),
             _buildTrackingStep(
               index: 3,
               title: 'Delivered Hot & Fresh',
-              subtitle: 'Enjoy your Mr. Pizza feast!',
+              subtitle: status == DemoOrderStatus.completed
+                  ? 'Feast completed! +${activeOrder?.pointsEarned ?? 0} points added'
+                  : 'Enjoy your Mr. Pizza feast!',
               icon: Icons.home,
-              isCompleted: false,
+              isCompleted: status == DemoOrderStatus.completed,
+              isCurrent: status == DemoOrderStatus.completed,
               isLast: true,
             ),
 
@@ -472,9 +532,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     );
   }
 
-  Widget _buildOrderItemsSection() {
+  Widget _buildOrderItemsSection(DemoOrder? activeOrder) {
     final snapshot = ref.watch(lastOrderSnapshotProvider);
-    if (snapshot == null || snapshot.items.isEmpty) return const SizedBox.shrink();
+    final items = (activeOrder?.items.isNotEmpty ?? false)
+        ? activeOrder!.items
+        : (snapshot?.items ?? const <CartItem>[]);
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final total = activeOrder?.total ?? snapshot?.totals.total ?? 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,7 +549,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           eyebrow: 'What You Ordered',
           title: 'Order Items',
           trailing: Text(
-            'Rs. ${snapshot.totals.total.toInt()}',
+            'Rs. ${total.toInt()}',
             style: const TextStyle(
               fontFamily: AppTheme.fontFamily,
               fontSize: 13,
@@ -493,9 +559,9 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ...snapshot.items.map((cartItem) => _buildOrderItemRow(cartItem)),
+        ...items.map((cartItem) => _buildOrderItemRow(cartItem)),
         const SizedBox(height: 8),
-        _buildTotalsRow(snapshot),
+        _buildTotalsRow(activeOrder, snapshot),
       ],
     );
   }
@@ -587,7 +653,15 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     );
   }
 
-  Widget _buildTotalsRow(LastOrderSnapshot snapshot) {
+  Widget _buildTotalsRow(DemoOrder? activeOrder, LastOrderSnapshot? snapshot) {
+    final subtotal =
+        activeOrder?.subtotal ?? snapshot?.totals.subtotal ?? 0.0;
+    final tax = activeOrder?.tax ?? snapshot?.totals.tax ?? 0.0;
+    final deliveryFee =
+        activeOrder?.deliveryFee ?? snapshot?.totals.deliveryFee ?? 0.0;
+    final discount = activeOrder?.discount ?? 0.0;
+    final total = activeOrder?.total ?? snapshot?.totals.total ?? 0.0;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -596,12 +670,20 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       ),
       child: Column(
         children: [
-          _totalLine('Subtotal', 'Rs. ${snapshot.totals.subtotal.toInt()}'),
+          _totalLine('Subtotal', 'Rs. ${subtotal.toInt()}'),
           const SizedBox(height: 4),
-          _totalLine('Tax (8%)', 'Rs. ${snapshot.totals.tax.toInt()}'),
-          if (snapshot.totals.deliveryFee > 0) ...[
+          _totalLine('Tax (8%)', 'Rs. ${tax.toInt()}'),
+          if (deliveryFee > 0) ...[
             const SizedBox(height: 4),
-            _totalLine('Delivery', 'Rs. ${snapshot.totals.deliveryFee.toInt()}'),
+            _totalLine('Delivery', 'Rs. ${deliveryFee.toInt()}'),
+          ],
+          if (discount > 0) ...[
+            const SizedBox(height: 4),
+            _totalLine(
+              'Voucher Discount (${activeOrder?.voucherCode ?? ""})',
+              '-Rs. ${discount.toInt()}',
+              isDiscount: true,
+            ),
           ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -609,7 +691,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           ),
           _totalLine(
             'Total',
-            'Rs. ${snapshot.totals.total.toInt()}',
+            'Rs. ${total.toInt()}',
             bold: true,
           ),
         ],
@@ -617,12 +699,19 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     );
   }
 
-  Widget _totalLine(String label, String value, {bool bold = false}) {
+  Widget _totalLine(String label, String value,
+      {bool bold = false, bool isDiscount = false}) {
+    final color = isDiscount
+        ? AppColors.success
+        : bold
+            ? AppColors.primary
+            : AppColors.textSecondary;
+
     final style = TextStyle(
       fontFamily: AppTheme.fontFamily,
       fontSize: bold ? 14 : 13,
       fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
-      color: bold ? AppColors.primary : AppColors.textSecondary,
+      color: color,
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

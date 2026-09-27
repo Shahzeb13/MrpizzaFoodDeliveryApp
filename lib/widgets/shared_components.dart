@@ -1383,6 +1383,18 @@ class _LocationSelectionDialogState
         .where((address) => address.addressLine != location.address)
         .toList();
 
+    final seenIds = <String>{};
+    final uniqueSavedAddresses = <UserAddress>[];
+    for (final address in savedAddresses) {
+      if (seenIds.add(address.id)) {
+        uniqueSavedAddresses.add(address);
+      }
+    }
+
+    final activeSelection = uniqueSavedAddresses.any((a) => a == _selectedSaved)
+        ? uniqueSavedAddresses.firstWhere((a) => a == _selectedSaved)
+        : null;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       backgroundColor: AppColors.surface,
@@ -1454,7 +1466,7 @@ class _LocationSelectionDialogState
                     ),
                   ),
               ],
-              if (savedAddresses.isNotEmpty) ...[
+              if (uniqueSavedAddresses.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 const Row(
                   children: [
@@ -1480,13 +1492,14 @@ class _LocationSelectionDialogState
                   width: double.infinity,
                   height: 46,
                   child: DropdownButtonFormField<UserAddress>(
-                    initialValue: _selectedSaved,
+                    key: ValueKey(activeSelection?.id),
+                    initialValue: activeSelection,
                     hint: const Text('Saved address'),
                     isExpanded: true,
                     borderRadius: BorderRadius.circular(18),
-                    items: savedAddresses
+                    items: uniqueSavedAddresses
                         .map(
-                          (address) => DropdownMenuItem(
+                          (address) => DropdownMenuItem<UserAddress>(
                             value: address,
                             child: Text(
                               address.addressLine,

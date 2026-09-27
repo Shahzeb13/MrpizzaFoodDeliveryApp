@@ -182,10 +182,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     if (!_formKey.currentState!.validate()) {
                                       return;
                                     }
-                                    ref.read(authStateProvider.notifier).login(
+                                    final success = await ref
+                                        .read(authStateProvider.notifier)
+                                        .login(
                                           _emailController.text,
                                           _passwordController.text,
                                         );
+                                    if (!mounted || !success) return;
+                                    // Navigation is the router's job. It waits
+                                    // for the role in `profiles` and then lands
+                                    // on that user's panel, so nothing here may
+                                    // navigate or set a role — doing so raced the
+                                    // auth flip and dropped riders on the
+                                    // customer panel.
                                   },
                             style: FilledButton.styleFrom(
                               backgroundColor: AppColors.primary,

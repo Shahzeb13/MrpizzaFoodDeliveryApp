@@ -153,4 +153,53 @@ void main() {
 
     expect(deviceSource.settingsOpened, isTrue);
   });
+
+  testWidgets('handles duplicate saved addresses gracefully without throwing dropdown assertion', (tester) async {
+    await pumpDialog(
+      tester,
+      savedAddresses: const [
+        UserAddress(
+          id: 'addr-1',
+          userId: 'user-1',
+          label: 'Home',
+          addressLine: 'House 12, Street 4, Abbottabad',
+        ),
+        UserAddress(
+          id: 'addr-1',
+          userId: 'user-1',
+          label: 'Home Duplicate',
+          addressLine: 'House 12, Street 4, Abbottabad',
+        ),
+      ],
+    );
+
+    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.pumpAndSettle();
+
+    expect(find.text('House 12, Street 4, Abbottabad'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rebuilding dialog after selecting saved address does not crash dropdown', (tester) async {
+    await pumpDialog(
+      tester,
+      savedAddresses: const [
+        UserAddress(
+          id: 'addr-1',
+          userId: 'user-1',
+          label: 'Home',
+          addressLine: 'House 12, Street 4, Abbottabad',
+        ),
+      ],
+    );
+
+    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('House 12, Street 4, Abbottabad').last);
+    await tester.pumpAndSettle();
+
+    // Trigger an extra rebuild
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

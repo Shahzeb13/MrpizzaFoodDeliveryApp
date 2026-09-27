@@ -124,6 +124,53 @@ void main() {
       expect(filtered.single.title, 'Zinger Burger');
     });
   });
+
+  group('an empty menu shows a friendly message instead of fake food', () {
+    Future<ProviderContainer> pumpEmptyMenu(WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          menuRepositoryProvider.overrideWith(
+            (ref) => _FakeMenuRepository(MenuCatalog.empty),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: MenuScreen()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      return container;
+    }
+
+    testWidgets('providers report nothing rather than the bundled mock items',
+        (tester) async {
+      final container = await pumpEmptyMenu(tester);
+
+      expect(container.read(allMenuItemsProvider), isEmpty);
+      expect(container.read(menuCategoriesProvider), isEmpty);
+      expect(container.read(filteredMenuItemsProvider), isEmpty);
+    });
+
+    testWidgets('the screen says the kitchen has nothing on right now',
+        (tester) async {
+      await pumpEmptyMenu(tester);
+
+      expect(find.textContaining('Nothing on the menu'), findsOneWidget);
+    });
+
+    testWidgets('the screen does not invent menu items while the menu is empty',
+        (tester) async {
+      await pumpEmptyMenu(tester);
+
+      expect(find.text('Chicken Fajita'), findsNothing);
+      expect(find.text('Zinger Supreme Burger'), findsNothing);
+    });
+  });
 }
 
 class _FakeMenuRepository implements MenuRepository {

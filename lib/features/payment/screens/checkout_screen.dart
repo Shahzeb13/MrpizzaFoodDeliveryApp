@@ -11,6 +11,7 @@ import '../../menu/providers/menu_provider.dart';
 import '../../orders/data/orders_repository.dart';
 import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
+import '../../orders/providers/order_flow_provider.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../../profile/models/profile.dart';
 import '../../profile/providers/address_selection_provider.dart';
@@ -25,6 +26,9 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
+  final _voucherController = TextEditingController();
+  String? _appliedVoucher;
+  double _voucherDiscount = 0.0;
 
   /// The branches currently loaded, or an empty list before the first load.
   /// Empty (not bundled) on purpose: inventing branches here would let an
@@ -38,6 +42,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncCheckout();
     });
+  }
+
+  @override
+  void dispose() {
+    _voucherController.dispose();
+    super.dispose();
+  }
+
+  void _handleApplyVoucher(OrderTotals totals) {
+    FocusScope.of(context).unfocus();
+    final code = _voucherController.text.trim().toUpperCase();
+    if (code.isEmpty) {
+      _showMessage('Please enter a voucher code', isError: true);
+      return;
+    }
+    if (code == 'SAVE10') {
+      setState(() {
+        _appliedVoucher = 'SAVE10';
+        _voucherDiscount = totals.subtotal * 0.10;
+      });
+      _showMessage('Voucher SAVE10 applied! 10% discount');
+    } else {
+      setState(() {
+        _appliedVoucher = null;
+        _voucherDiscount = 0.0;
+      });
+      _showMessage('Invalid voucher code. Try "SAVE10"', isError: true);
+    }
   }
 
   /// Applies the sensible defaults once the address/branch data is available:
@@ -532,6 +564,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    final discountedTotal =
+        (totals.total - _voucherDiscount).clamp(0.0, double.infinity);
+    final profile = ref.read(profileFutureProvider).value;
+
+    ref.read(orderFlowProvider.notifier).createOrder(
+          items: cart.items,
+          subtotal: totals.subtotal,
+          tax: totals.tax,
+          deliveryFee: totals.deliveryFee,
+          discount: _voucherDiscount,
+          voucherCode: _appliedVoucher,
+          total: discountedTotal,
+          orderType: resolvedCheckout.orderType,
+          customerName: (profile?.fullName.isNotEmpty ?? false)
+              ? profile!.fullName
+              : 'Aalyan Mughal',
+          customerPhone: (profile?.phone.isNotEmpty ?? false)
+              ? profile!.phone
+              : '+92 331 6290108',
+          deliveryAddress: resolvedCheckout.isDelivery
+              ? (resolvedCheckout.address?.addressLine ??
+                  'Mandian, Abbottabad')
+              : 'Store Pickup (${branch.name})',
+          branchName: branch.name,
+        );
+
     // Snapshot cart BEFORE clearing so the tracking screen can display items.
     ref.read(lastOrderSnapshotProvider.notifier).state = LastOrderSnapshot(
       items: List.unmodifiable(cart.items),
@@ -718,6 +776,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ..._buildDeliverySection(addressesAsync, branchesAsync, checkout)
           else
             ..._buildPickupSection(branchesAsync, checkout),
+          const SizedBox(height: 20),
+          _buildVoucherSection(totals),
           const SizedBox(height: 20),
           _buildSummarySection(checkout, totals),
           const SizedBox(height: 30),
@@ -1370,10 +1430,125 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  Widget _buildVoucherSection(OrderTotals totals) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MrSectionTitle(title: 'Voucher & Promo Code'),
+        const SizedBox(height: 6),
+        const MrFadeDivider(),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: _appliedVoucher != null
+                  ? AppColors.success
+                  : AppColors.border,
+              width: _appliedVoucher != null ? 1.5 : 1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: AppColors.shadowSoft,
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.confirmation_number_outlined,
+                color: _appliedVoucher != null
+                    ? AppColors.success
+                    : AppColors.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _appliedVoucher != null
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Code "$_appliedVoucher" applied!',
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.success,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '10% discount (-Rs. ${_voucherDiscount.toInt()})',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      )
+                    : TextField(
+                        controller: _voucherController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          hintText: 'Enter voucher code (e.g. SAVE10)',
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textLight,
+                          ),
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        ),
+                      ),
+              ),
+              if (_appliedVoucher != null)
+                IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textLight, size: 20),
+                  onPressed: () {
+                    setState(() {
+                      _appliedVoucher = null;
+                      _voucherDiscount = 0.0;
+                      _voucherController.clear();
+                    });
+                    _showMessage('Voucher removed');
+                  },
+                )
+              else
+                FilledButton(
+                  onPressed: () => _handleApplyVoucher(totals),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    minimumSize: const Size(60, 36),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Apply',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSummarySection(
     CheckoutState checkout,
     OrderTotals totals,
   ) {
+    final finalTotal =
+        (totals.total - _voucherDiscount).clamp(0.0, double.infinity);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1407,6 +1582,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 'Delivery Charge',
                 'Rs. ${totals.deliveryFee.toInt()}',
               ),
+              if (_appliedVoucher != null) ...[
+                const SizedBox(height: 8),
+                _summaryRow(
+                  'Voucher Discount ($_appliedVoucher)',
+                  '-Rs. ${_voucherDiscount.toInt()}',
+                  color: AppColors.success,
+                ),
+              ],
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: MrFadeDivider(),
@@ -1424,7 +1607,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ),
                   ),
                   Text(
-                    'Rs. ${totals.total.toInt()}',
+                    'Rs. ${finalTotal.toInt()}',
                     style: const TextStyle(
                       fontFamily: AppTheme.fontFamily,
                       fontSize: 22,
@@ -1442,12 +1625,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _summaryRow(String label, String value) {
+  Widget _summaryRow(String label, String value, {Color? color}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: AppColors.textSecondary)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(label,
+            style: TextStyle(
+                color: color ?? AppColors.textSecondary,
+                fontWeight: color != null ? FontWeight.w700 : FontWeight.normal)),
+        Text(value,
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color ?? AppColors.textPrimary)),
       ],
     );
   }
@@ -1464,6 +1653,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final hasBranch = checkout.branch != null;
     final canPlace = !_isPlacingOrder &&
         (checkout.isDelivery ? hasAddress || hasBranch : hasBranch);
+    final finalTotal =
+        (totals.total - _voucherDiscount).clamp(0.0, double.infinity);
+
     return SizedBox(
       width: double.infinity,
       height: 58,
@@ -1519,7 +1711,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Rs. ${totals.total.toInt()}',
+                    'Rs. ${finalTotal.toInt()}',
                     style: const TextStyle(
                       fontFamily: AppTheme.fontFamily,
                       fontSize: 15,

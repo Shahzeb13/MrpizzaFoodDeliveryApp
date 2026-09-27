@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
+import '../providers/order_flow_provider.dart';
 
-class MyOrdersScreen extends StatelessWidget {
+class MyOrdersScreen extends ConsumerWidget {
   const MyOrdersScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> orders = [
+  Widget build(BuildContext context, WidgetRef ref) {
+    final demoOrders = ref.watch(orderFlowProvider);
+
+    final List<Map<String, dynamic>> defaultOrders = [
       {
         'id': '#MP-84920',
         'date': 'Today, 2:15 PM',
@@ -37,6 +41,58 @@ class MyOrdersScreen extends StatelessWidget {
         'isActive': false,
       },
     ];
+
+    final demoList = demoOrders.map((o) {
+      String statusText;
+      Color statusColor;
+      bool isActive = false;
+      switch (o.status) {
+        case DemoOrderStatus.pending:
+          statusText = 'Pending';
+          statusColor = AppColors.warning;
+          isActive = true;
+          break;
+        case DemoOrderStatus.assigned:
+          statusText = 'Rider Assigned';
+          statusColor = AppColors.primary;
+          isActive = true;
+          break;
+        case DemoOrderStatus.accepted:
+          statusText = 'Preparing';
+          statusColor = AppColors.warning;
+          isActive = true;
+          break;
+        case DemoOrderStatus.pickedUp:
+          statusText = 'On The Way';
+          statusColor = AppColors.primary;
+          isActive = true;
+          break;
+        case DemoOrderStatus.completed:
+          statusText = o.pointsEarned > 0
+              ? 'Delivered (+${o.pointsEarned} Pts)'
+              : 'Delivered';
+          statusColor = AppColors.success;
+          isActive = false;
+          break;
+        case DemoOrderStatus.rejected:
+          statusText = 'Reassigning Rider';
+          statusColor = Colors.orange;
+          isActive = true;
+          break;
+      }
+
+      return {
+        'id': o.id,
+        'date': 'Today, Just Now',
+        'items': o.itemsSummary,
+        'total': o.total.toInt(),
+        'status': statusText,
+        'statusColor': statusColor,
+        'isActive': isActive,
+      };
+    }).toList();
+
+    final orders = [...demoList, ...defaultOrders];
 
     return Scaffold(
       backgroundColor: AppColors.background,

@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
-import '../../menu/data/menu_repository.dart';
+import '../../menu/data/menu_catalog.dart';
 import '../../menu/models/menu_category.dart';
 import '../../menu/providers/menu_provider.dart';
 
@@ -513,7 +513,64 @@ class _MenuCatalogSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final searchQuery = ref.watch(searchQueryProvider).trim().toLowerCase();
     final categories = ref.watch(menuCategoriesProvider);
-    final catalog = ref.watch(menuCatalogProvider).value ?? MenuRepository.mockCatalog;
+    final catalogAsync = ref.watch(menuCatalogProvider);
+    final catalog = catalogAsync.valueOrNull ?? MenuCatalog.empty;
+
+    // Nothing on, or the fetch failed: say so plainly instead of padding the
+    // feed with a bundled sample menu the customer cannot order.
+    if (catalogAsync.hasError || (catalog.isEmpty && !catalogAsync.isLoading)) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.ramen_dining_rounded,
+                  size: 46,
+                  color: AppColors.textLight,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  catalogAsync.hasError
+                      ? 'Could not load the menu'
+                      : 'Nothing on the menu right now',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  catalogAsync.hasError
+                      ? 'Check your connection and try again.'
+                      : 'The kitchen has not added anything yet. Please check '
+                          'back a little later.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 13.5,
+                    height: 1.4,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: () => ref.invalidate(menuCatalogProvider),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return SliverMainAxisGroup(
       slivers: <Widget>[

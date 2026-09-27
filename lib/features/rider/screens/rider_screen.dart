@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
+import '../../orders/providers/order_flow_provider.dart';
 
 class RiderScreen extends ConsumerStatefulWidget {
   const RiderScreen({super.key});
@@ -25,6 +26,7 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
   DeliveryStep currentStep = DeliveryStep.accepted;
   double todayEarnings = 2450.0;
   int completedCount = 8;
+  DemoOrder? _justDeliveredOrder;
 
   final List<Map<String, String>> completedDeliveries = [
     {
@@ -49,6 +51,43 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
       'payout': 'Rs. 300',
     },
   ];
+
+  void _acceptOrder(DemoOrder order) {
+    ref.read(orderFlowProvider.notifier).acceptOrder(order.id);
+    showTopCartToast(context, 'Job Accepted! Proceed to Kitchen.');
+  }
+
+  void _rejectOrder(DemoOrder order) {
+    ref.read(orderFlowProvider.notifier).rejectOrder(order.id);
+    showTopCartToast(context, 'Offer Rejected. Finding another rider...');
+  }
+
+  void _pickupOrder(DemoOrder order) {
+    ref.read(orderFlowProvider.notifier).pickupOrder(order.id);
+    showTopCartToast(
+        context, 'Order Picked Up! Head to ${order.deliveryAddress}.');
+  }
+
+  void _completeOrder(DemoOrder order) {
+    final points =
+        ref.read(orderFlowProvider.notifier).completeOrder(order.id);
+    setState(() {
+      todayEarnings += 250;
+      completedCount += 1;
+      _justDeliveredOrder = order;
+      completedDeliveries.insert(0, {
+        'id': order.id,
+        'customer': order.customerName,
+        'address': order.deliveryAddress,
+        'time': 'Just Now',
+        'payout': 'Rs. 250',
+      });
+    });
+    showTopCartToast(
+      context,
+      'Delivery Completed! Rs. 250 payout credited. +$points loyalty points awarded!',
+    );
+  }
 
   void _advanceDeliveryStep() {
     setState(() {
@@ -79,6 +118,25 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final allOrders = ref.watch(orderFlowProvider);
+    final activeDelivery = allOrders.cast<DemoOrder?>().firstWhere(
+          (o) =>
+              o?.status == DemoOrderStatus.accepted ||
+              o?.status == DemoOrderStatus.pickedUp,
+          orElse: () => null,
+        );
+    final pendingOffers = allOrders
+        .where(
+          (o) =>
+              o.status == DemoOrderStatus.pending ||
+              o.status == DemoOrderStatus.assigned,
+        )
+        .toList();
+    final hasActiveTask = isOnline &&
+        (activeDelivery != null ||
+            (currentStep != DeliveryStep.delivered &&
+                currentStep != DeliveryStep.newOffer));
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -186,9 +244,7 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
                   const MrSectionTitle(
                     title: 'Current Delivery Task',
                   ),
-                  if (isOnline &&
-                      currentStep != DeliveryStep.delivered &&
-                      currentStep != DeliveryStep.newOffer)
+                  if (hasActiveTask)
                     const MrEyebrow(
                       text: 'En Route',
                       background: AppColors.primaryTint,
@@ -201,12 +257,25 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
               // Active Task Card Logic
               if (!isOnline)
                 _buildOfflineCard()
+              else if (_justDeliveredOrder != null)
+                _buildDeliveredSuccessCard(_justDeliveredOrder)
+              else if (activeDelivery != null)
+                _buildActiveOrderCard(activeDelivery)
+              else if (pendingOffers.isNotEmpty)
+                Column(
+                  children: pendingOffers
+                      .map((offer) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildNewOfferCard(offer),
+                          ))
+                      .toList(),
+                )
               else if (currentStep == DeliveryStep.delivered)
-                _buildDeliveredSuccessCard()
+                _buildDeliveredSuccessCard(null)
               else if (currentStep == DeliveryStep.newOffer)
-                _buildNewOfferCard()
+                _buildDefaultNewOfferCard()
               else
-                _buildActiveOrderCard(),
+                _buildDefaultActiveOrderCard(),
 
               const SizedBox(height: 26),
 
@@ -292,7 +361,7 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
     );
   }
 
-  Widget _buildDeliveredSuccessCard() {
+  Widget _buildDeliveredSuccessCard(DemoOrder? order) {
     return MrDoubleBezel(
       radius: 24,
       innerColor: const Color(0xFFE4F1E8),
@@ -311,7 +380,9 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Payout of Rs. 250 has been credited.',
+            order != null
+                ? 'Payout of Rs. 250 credited. +${order.pointsEarned} loyalty points awarded.'
+                : 'Payout of Rs. 250 has been credited.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 18),
@@ -319,7 +390,10 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                setState(() => currentStep = DeliveryStep.newOffer);
+                setState(() {
+                  _justDeliveredOrder = null;
+                  currentStep = DeliveryStep.newOffer;
+                });
               },
               child: const Text('Ready for Next Delivery'),
             ),
@@ -329,7 +403,83 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
     );
   }
 
-  Widget _buildNewOfferCard() {
+  Widget _buildNewOfferCard(DemoOrder order) {
+    return MrCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const MrEyebrow(
+                text: 'New Offer',
+                background: AppColors.goldTint,
+                foreground: Color(0xFF9A6B1F),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 2),
+                child: Text(
+                  'Payout: Rs. 250',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(color: AppColors.success),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Order ${order.id}',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Pickup: ${order.branchName} -> Dropoff: ${order.deliveryAddress}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Items: ${order.itemsSummary} (Rs. ${order.total.toInt()})',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _rejectOrder(order),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Colors.redAccent),
+                  ),
+                  child: const Text('Reject Offer'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: () => _acceptOrder(order),
+                  child: const Text('Accept Order Offer'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultNewOfferCard() {
     return MrCard(
       padding: const EdgeInsets.all(18),
       borderRadius: BorderRadius.circular(20),
@@ -379,7 +529,8 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
     );
   }
 
-  Widget _buildActiveOrderCard() {
+  Widget _buildActiveOrderCard(DemoOrder order) {
+    final isAccepted = order.status == DemoOrderStatus.accepted;
     return MrCard(
       padding: const EdgeInsets.all(18),
       borderRadius: BorderRadius.circular(20),
@@ -387,6 +538,168 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Order ID & Payout Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Order ${order.id}',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              Text(
+                'Payout: Rs. 250',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(color: AppColors.success),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Route Timeline
+          _buildRouteRow(
+            isPickup: true,
+            title: 'Pickup: ${order.branchName}',
+            subtitle: 'Mr. Pizza Kitchen',
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 7),
+            child: Container(
+              width: 2,
+              height: 16,
+              color: AppColors.borderDeep,
+            ),
+          ),
+          _buildRouteRow(
+            isPickup: false,
+            title: 'Dropoff: ${order.customerName}',
+            subtitle: order.deliveryAddress,
+          ),
+
+          const MrFadeDivider(),
+          const SizedBox(height: 16),
+
+          // Order Items & Payment
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Items (${order.items.length})',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      order.itemsSummary,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: AppColors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Cash to Collect',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rs. ${order.total.toInt()}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(color: AppColors.warning),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+
+          // Call & Maps Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    showTopCartToast(
+                        context, 'Calling customer ${order.customerPhone}...');
+                  },
+                  icon: const Icon(Icons.phone,
+                      size: 16, color: AppColors.primary),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Call Customer'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    showTopCartToast(
+                        context, 'Opening Maps Navigation to ${order.deliveryAddress}...');
+                  },
+                  icon: const Icon(Icons.navigation_rounded,
+                      size: 16, color: Colors.white),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('Navigation'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Primary State CTA Action Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                if (isAccepted) {
+                  _pickupOrder(order);
+                } else {
+                  _completeOrder(order);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isAccepted ? AppColors.warning : AppColors.success,
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  isAccepted
+                      ? 'Confirm Picked Up from Kitchen'
+                      : 'Mark Delivered & Collect Cash',
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDefaultActiveOrderCard() {
+    return MrCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: BorderRadius.circular(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -404,8 +717,6 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Route Timeline (Clean Dots & Lines)
           _buildRouteRow(
             isPickup: true,
             title: 'Pickup: Mr. Pizza Main Kitchen',
@@ -424,11 +735,8 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
             title: 'Dropoff: Aalyan Mughal',
             subtitle: 'COMSATS Abbottabad, Hostel 3, Room 204',
           ),
-
           const MrFadeDivider(),
           const SizedBox(height: 16),
-
-          // Order Items & Payment
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -473,10 +781,7 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 18),
-
-          // Call & Maps Action Buttons
           Row(
             children: [
               Expanded(
@@ -510,10 +815,7 @@ class _RiderScreenState extends ConsumerState<RiderScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
-          // Primary State CTA Action Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(

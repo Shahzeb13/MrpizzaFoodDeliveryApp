@@ -82,7 +82,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentRole = ref.watch(roleProvider);
+    final currentRole = ref.watch(roleProvider).value ?? UserRole.customer;
     final profileAsync = ref.watch(profileFutureProvider);
     final email = ref.watch(authStateProvider).user?.email ?? '';
 
@@ -295,20 +295,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
             const SizedBox(height: 24),
 
-            // Mode Switch Banner
+            // Account type, read-only. The role lives in the `profiles` table
+            // and is changed by the branch manager, never from the app — a
+            // local toggle here would hand every customer the rider panel.
             MrCard(
               padding: const EdgeInsets.all(16),
               borderRadius: BorderRadius.circular(18),
               color: AppColors.primaryTint,
-child: Row(
-                  children: [
-                    MrIconWell(
-                      icon: currentRole == UserRole.customer
-                          ? Icons.two_wheeler_rounded
-                          : Icons.local_pizza_rounded,
-                      color: AppColors.primary,
-                      background: AppColors.surface,
-                    ),
+              child: Row(
+                children: [
+                  MrIconWell(
+                    icon: currentRole == UserRole.customer
+                        ? Icons.local_pizza_rounded
+                        : Icons.two_wheeler_rounded,
+                    color: AppColors.primary,
+                    background: AppColors.surface,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -316,35 +318,19 @@ child: Row(
                       children: [
                         Text(
                           currentRole == UserRole.customer
-                              ? 'Switch to Rider Mode'
-                              : 'Switch to Customer Mode',
+                              ? 'Customer account'
+                              : 'Rider account',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           currentRole == UserRole.customer
-                              ? 'Test rider dashboard interface'
-                              : 'Order delicious pizzas',
+                              ? 'Order delicious pizzas'
+                              : 'Manage your deliveries',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () {
-                      final newRole =
-                          currentRole == UserRole.customer
-                              ? UserRole.rider
-                              : UserRole.customer;
-                      ref.read(roleProvider.notifier).setRole(newRole);
-                      if (newRole == UserRole.rider) {
-                        context.go('/rider');
-                      } else {
-                        context.go('/home');
-                      }
-                    },
-                    child: const Text('Switch'),
                   ),
                 ],
               ),

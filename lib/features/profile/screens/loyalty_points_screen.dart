@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
+import '../../orders/providers/order_flow_provider.dart';
 
 class LoyaltyPointsScreen extends StatefulWidget {
   const LoyaltyPointsScreen({super.key});
@@ -10,9 +12,9 @@ class LoyaltyPointsScreen extends StatefulWidget {
 }
 
 class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
-  int points = 120;
+  int _localPoints = 120;
 
-  final List<Map<String, dynamic>> rewards = [
+  final List<Map<String, dynamic>> rewards = const [
     {
       'title': 'Free 500ml Cold Drink',
       'points': 100,
@@ -35,6 +37,33 @@ class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasScope =
+        context.getElementForInheritedWidgetOfExactType<UncontrolledProviderScope>() !=
+            null;
+
+    if (hasScope) {
+      return Consumer(
+        builder: (context, ref, _) {
+          final points = ref.watch(loyaltyPointsProvider);
+          return _buildContent(context, points, (toDeduct) {
+            ref.read(loyaltyPointsProvider.notifier).deductPoints(toDeduct);
+          });
+        },
+      );
+    }
+
+    return _buildContent(context, _localPoints, (toDeduct) {
+      setState(() {
+        _localPoints -= toDeduct;
+      });
+    });
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    int points,
+    void Function(int) onDeduct,
+  ) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -135,25 +164,31 @@ class _LoyaltyPointsScreenState extends State<LoyaltyPointsScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox(
-                        height: 40,
-                        child: ElevatedButton(
-                          onPressed: canRedeem
-                              ? () {
-                                  setState(() {
-                                    points -= item['points'] as int;
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Redeemed ${item['title']}!'),
-                                      backgroundColor: AppColors.success,
-                                    ),
-                                  );
-                                }
-                              : null,
-                          child: Text(canRedeem ? 'Redeem' : 'Locked'),
+                      // Compact pill: the app-wide CTA style is a 52dp pill with
+                      // 15dp of vertical padding, so the 40dp box starved the
+                      // label (10dp for a 21dp line) and Flutter clipped it.
+                      // Height and padding have to be overridden together.
+                      ElevatedButton(
+                        onPressed: canRedeem
+                            ? () {
+                                onDeduct(item['points'] as int);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                        'Redeemed ${item['title']}!'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 18),
+                          disabledBackgroundColor: AppColors.sand,
+                          disabledForegroundColor: AppColors.textSecondary,
                         ),
+                        child: Text(canRedeem ? 'Redeem' : 'Locked'),
                       ),
                     ],
                   ),

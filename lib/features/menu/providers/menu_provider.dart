@@ -16,31 +16,34 @@ final menuRepositoryProvider =
     Provider<MenuRepository>((ref) => MenuRepository());
 
 /// The real menu: the `categories` rows joined to the `menu_items` rows that
-/// point at them. Falls back to the bundled offline catalog so screens always
-/// have something to render.
+/// point at them.
+///
+/// While loading or on failure this is empty rather than a bundled sample menu.
+/// A customer must never be shown food that is not actually for sale; the
+/// screens render a loading state, a retry, or a "nothing on today" message.
 final menuCatalogProvider = FutureProvider<MenuCatalog>((ref) {
   return ref.watch(menuRepositoryProvider).fetchMenuCatalog();
 });
 
 /// The category tabs, in the order the restaurant arranged them.
 final menuCategoriesProvider = Provider<List<MenuCategory>>((ref) {
-  return ref.watch(menuCatalogProvider).value?.categories ??
-      MenuRepository.mockCategories;
+  return ref.watch(menuCatalogProvider).valueOrNull?.categories ?? const [];
 });
 
 /// Every item, for screens that show everything (favourites, search-all).
 final allMenuItemsProvider = Provider<List<MenuItem>>((ref) {
-  return ref.watch(menuCatalogProvider).value?.allItems ??
-      MenuRepository.mockCatalog.allItems;
+  return ref.watch(menuCatalogProvider).valueOrNull?.allItems ?? const [];
 });
 
 // Filtered Menu Items Provider
 final filteredMenuItemsProvider = Provider<List<MenuItem>>((ref) {
   final categoryId = ref.watch(selectedCategoryIdProvider);
   final query = ref.watch(searchQueryProvider).trim().toLowerCase();
-  final catalog = ref.watch(menuCatalogProvider).value ?? MenuRepository.mockCatalog;
+  final catalog =
+      ref.watch(menuCatalogProvider).valueOrNull ?? MenuCatalog.empty;
 
-  final pool = categoryId == null ? catalog.allItems : catalog.itemsIn(categoryId);
+  final pool =
+      categoryId == null ? catalog.allItems : catalog.itemsIn(categoryId);
   if (query.isEmpty) return pool;
 
   return pool

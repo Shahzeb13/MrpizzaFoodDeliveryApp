@@ -15,7 +15,6 @@ class AppDrawer extends ConsumerStatefulWidget {
 }
 
 class _AppDrawerState extends ConsumerState<AppDrawer> {
-  bool _offerNotifications = true;
   int _versionTapCount = 0;
 
   /// Live profile data for the drawer header — never hardcoded.
@@ -145,12 +144,13 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 children: [
-                  _buildDrawerTile(
-                    icon: Icons.account_balance_wallet_rounded,
-                    title: 'My Wallet',
-                    trailing: _buildBadge('Rs. 0.00'),
-                    onTap: () => _push('/wallet'),
-                  ),
+                  // Wallet entry hidden from the drawer for now:
+                  // _buildDrawerTile(
+                  //   icon: Icons.account_balance_wallet_rounded,
+                  //   title: 'My Wallet',
+                  //   trailing: _buildBadge('Rs. 0.00'),
+                  //   onTap: () => _push('/wallet'),
+                  // ),
                   _buildDrawerTile(
                     icon: Icons.stars_rounded,
                     title: 'Loyalty Points',
@@ -176,53 +176,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     icon: Icons.headset_mic_rounded,
                     title: 'Support Center',
                     onTap: () => _push('/support'),
-                  ),
-
-                  const Padding(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: Divider(height: 1, color: AppColors.border),
-                  ),
-
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            MrIconWell(
-                              icon: Icons.notifications_active_rounded,
-                              size: 18,
-                              color: AppColors.textPrimary,
-                              background: AppColors.sand,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Offer Notifications',
-                              style: TextStyle(
-                                fontFamily: AppTheme.fontFamily,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Transform.scale(
-                          scale: 0.8,
-                          child: Switch(
-                            value: _offerNotifications,
-                            activeThumbColor: Colors.white,
-                            activeTrackColor: AppColors.primary,
-                            onChanged: (val) {
-                              setState(() => _offerNotifications = val);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
 
                   const Padding(

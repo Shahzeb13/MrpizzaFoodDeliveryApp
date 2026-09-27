@@ -70,4 +70,15 @@ class MenuCatalog {
 
   /// Total items across all sections, for "see all" style rows.
   int get itemCount => allItems.length;
+
+  /// A menu with nothing on it.
+  ///
+  /// The app used to answer an empty or failed fetch with a bundled mock catalog,
+  /// which meant a customer could be shown sample pizzas that were not for sale.
+  /// An empty menu is now reported as empty so the screen can say so.
+  static const MenuCatalog empty = MenuCatalog._(
+    categories: [],
+    allItems: [],
+    itemsByCategoryId: {},
+  );
 }

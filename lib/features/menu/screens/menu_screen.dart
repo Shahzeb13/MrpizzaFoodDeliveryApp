@@ -60,10 +60,64 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
     super.dispose();
   }
 
+  /// A plain, honest message with one way out. Used instead of the bundled
+  /// sample menu that used to stand in for a failed or empty fetch.
+  Widget _buildCatalogProblem({
+    required String title,
+    required String detail,
+    required VoidCallback onRetry,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.ramen_dining_rounded,
+              size: 46,
+              color: AppColors.textLight,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 13.5,
+                height: 1.4,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final catalogAsync = ref.watch(menuCatalogProvider);
     final filteredItems = ref.watch(filteredMenuItemsProvider);
     final categories = ref.watch(menuCategoriesProvider);
+    final searchQuery = ref.watch(searchQueryProvider).trim();
     _syncTabController(categories.length);
 
     return Scaffold(
@@ -133,52 +187,80 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
       ),
       body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: _isGridView
-                ? GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.85,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
+          // Loading, failed and empty each get their own honest message. The
+          // screen used to fall back to a bundled sample menu, which showed
+          // customers pizzas that were not for sale.
+          if (catalogAsync.isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (catalogAsync.hasError)
+            _buildCatalogProblem(
+              title: 'Could not load the menu',
+              detail: 'Check your connection and try again.',
+              onRetry: () => ref.invalidate(menuCatalogProvider),
+            )
+          else if (filteredItems.isEmpty)
+            _buildCatalogProblem(
+              title: searchQuery.isNotEmpty
+                  ? 'Nothing matched that search'
+                  : 'Nothing on the menu right now',
+              detail: searchQuery.isNotEmpty
+                  ? 'Try a different word, or browse a category instead.'
+                  : 'The kitchen has not added anything yet. Please check back '
+                      'a little later.',
+              onRetry: searchQuery.isNotEmpty
+                  ? () => ref.read(searchQueryProvider.notifier).state = ''
+                  : () => ref.invalidate(menuCatalogProvider),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _isGridView
+                  ? GridView.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.85,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 16,
+                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
+                      itemCount: filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final item = filteredItems[index];
+                        return GridItemCard(
+                          item: item,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) =>
+                                  CustomizationBottomSheet(item: item),
+                            );
+                          },
+                        );
+                      },
+                    )
+                  : ListView.builder(
+                      itemCount: filteredItems.length,
+                      padding: const EdgeInsets.only(top: 4, bottom: 90),
+                      itemBuilder: (context, index) {
+                        final item = filteredItems[index];
+                        return PizzaCard(
+                          item: item,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) =>
+                                  CustomizationBottomSheet(item: item),
+                            );
+                          },
+                        );
+                      },
                     ),
-                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
-                    itemCount: filteredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = filteredItems[index];
-                      return GridItemCard(
-                        item: item,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => CustomizationBottomSheet(item: item),
-                          );
-                        },
-                      );
-                    },
-                  )
-                : ListView.builder(
-                    itemCount: filteredItems.length,
-                    padding: const EdgeInsets.only(top: 4, bottom: 90),
-                    itemBuilder: (context, index) {
-                      final item = filteredItems[index];
-                      return PizzaCard(
-                        item: item,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) => CustomizationBottomSheet(item: item),
-                          );
-                        },
-                      );
-                    },
-                  ),
-          ),
+            ),
           Positioned(
             left: 0,
             right: 0,
