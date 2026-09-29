@@ -53,6 +53,10 @@ dependencies:
   # in whatever maps app the phone has.
   url_launcher: ^6.3.0
 
+  # Live updates: the rider dashboard re-reads assignments as the shop assigns,
+  # accepts and delivers them.
+  realtime_client: ^2.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

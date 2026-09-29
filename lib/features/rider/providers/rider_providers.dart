@@ -11,9 +11,9 @@ final riderDetailsProvider = FutureProvider<RiderDetails?>((ref) async {
   return ref.watch(riderRepositoryProvider).fetchRiderDetails();
 });
 
-/// The rider's assignments, newest first.
-final riderDeliveriesProvider = FutureProvider<List<RiderDelivery>>((ref) async {
-  return ref.watch(riderRepositoryProvider).fetchDeliveries();
+/// The rider's assignments, re-read whenever the database says they changed.
+final riderDeliveriesProvider = StreamProvider<List<RiderDelivery>>((ref) {
+  return ref.watch(riderRepositoryProvider).streamDeliveries();
 });
 
 /// The store's payout per completed delivery. 0 means unreadable.

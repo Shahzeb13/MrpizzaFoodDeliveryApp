@@ -18,6 +18,10 @@ class _FakeRiderRepository extends RiderRepository {
   Future<RiderDetails?> fetchRiderDetails() async => details;
 
   @override
+  Stream<List<RiderDelivery>> streamDeliveries() =>
+      Stream<List<RiderDelivery>>.value(deliveries);
+
+  @override
   Future<List<RiderDelivery>> fetchDeliveries() async => deliveries;
 
   @override

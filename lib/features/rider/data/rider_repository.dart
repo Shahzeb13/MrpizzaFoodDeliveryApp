@@ -5,6 +5,25 @@ import '../../../core/network/supabase_client.dart';
 import '../models/rider_availability.dart';
 import '../models/rider_delivery.dart';
 
+/// A channel name unique to this rider, so two signed-in riders on the same
+/// socket do not end up sharing a subscription.
+String riderAssignmentChannelName(String riderId) =>
+    'rider-assignments-$riderId';
+
+/// Scopes the subscription to one rider's rows.
+///
+/// This is not an optimisation. Without the filter the client would ask for
+/// every rider's assignments; RLS would still refuse to hand over rows the
+/// caller cannot see, but the filter keeps the traffic honest and avoids
+/// relying on a second line of defence for the one query a rider makes.
+PostgresChangeFilter riderAssignmentChangeFilter(String riderId) {
+  return PostgresChangeFilter(
+    type: PostgresChangeFilterType.eq,
+    column: 'rider_id',
+    value: riderId,
+  );
+}
+
 /// A transition the database refused, carrying the reason it gave.
 class RiderRepositoryException implements Exception {
   final String message;
@@ -53,9 +72,46 @@ class RiderRepository {
     final rows = await client.rpc('rider_deliveries');
     if (rows is! List) return const [];
     return rows
-        .map((row) =>
-            RiderDelivery.fromAssignmentRow(Map<String, dynamic>.from(row as Map)))
+        .map((row) => RiderDelivery
+            .fromAssignmentRow(Map<String, dynamic>.from(row as Map)))
         .toList();
+  }
+
+  /// The same assignments, re-read every time the database says they changed.
+  ///
+  /// Live only while the app is open. A rider with the app closed is not told
+  /// about a new assignment until they next open it; push notifications are
+  /// the fix for that and need a Firebase project.
+  Stream<List<RiderDelivery>> streamDeliveries() {
+    final riderId = client.auth.currentUser?.id;
+    if (riderId == null) {
+      return Stream<List<RiderDelivery>>.value(const <RiderDelivery>[]);
+    }
+
+    return Stream<List<RiderDelivery>>.multi((controller) {
+      Future<void> emit() async {
+        try {
+          controller.add(await fetchDeliveries());
+        } catch (error) {
+          controller.addError(error);
+        }
+      }
+
+      final channel = client
+          .channel(riderAssignmentChannelName(riderId))
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'rider_assignments',
+            filter: riderAssignmentChangeFilter(riderId),
+            callback: (_) => emit(),
+          );
+
+      channel.subscribe();
+      controller.onCancel = () => client.removeChannel(channel);
+
+      emit();
+    });
   }
 
   /// The store's configured payout per completed delivery, or 0 when it cannot
