@@ -32,8 +32,13 @@ RiderActionButton? primaryActionFor(RiderDelivery delivery) {
 List<RiderDelivery> pendingOffersFor(List<RiderDelivery> deliveries) =>
     deliveries.where((d) => d.isOffer).toList();
 
-/// The job this rider is doing, if any. There is only ever one: the dashboard
-/// shows a single job card.
+/// The job this rider is doing, if any.
+///
+/// Returns a single job because the database enforces at most one active
+/// assignment per rider: `rider_assignments_one_active_per_rider` in migration
+/// `20260928093000_rider_one_active_assignment.sql` is a partial unique index
+/// that refuses a second `accepted` or `picked_up` row for the same rider. The
+/// first match is therefore always the only match.
 RiderDelivery? activeDeliveryFor(List<RiderDelivery> deliveries) {
   for (final delivery in deliveries) {
     if (delivery.isActive) return delivery;

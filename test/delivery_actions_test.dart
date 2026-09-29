@@ -48,13 +48,15 @@ void main() {
   });
 
   group('the dashboard buckets never overlap', () {
+    // The database enforces at most one active assignment per rider
+    // (rider_assignments_one_active_per_rider), so a realistic rider never has
+    // an 'accepted' and a 'picked_up' job at the same time.
     final all = [
       _delivery('assigned', id: '1'),
       _delivery('accepted', id: '2'),
-      _delivery('picked_up', id: '3'),
-      _delivery('delivered', id: '4'),
-      _delivery('declined', id: '5'),
-      _delivery('failed', id: '6'),
+      _delivery('delivered', id: '3'),
+      _delivery('declined', id: '4'),
+      _delivery('failed', id: '5'),
     ];
 
     test('every delivery lands in exactly one bucket', () {
@@ -83,17 +85,17 @@ void main() {
       expect(pendingOffersFor(all).map((d) => d.assignmentId), ['1']);
     });
 
-    test('the active job is the accepted one, and pickup is not a second one', () {
+    test('the active job is found whether it is accepted or picked up', () {
       expect(activeDeliveryFor(all)?.assignmentId, '2');
       expect(
-          activeDeliveryFor([_delivery('picked_up', id: '3')])?.assignmentId,
-          '3');
+          activeDeliveryFor([_delivery('picked_up', id: '7')])?.assignmentId,
+          '7');
     });
 
     test('history is everything that has ended', () {
       expect(
         deliveredHistoryFor(all).map((d) => d.assignmentId).toSet(),
-        {'4', '5', '6'},
+        {'3', '4', '5'},
       );
     });
 
