@@ -19,6 +19,8 @@ import '../../features/profile/screens/support_center_screen.dart';
 import '../../features/profile/screens/wallet_screen.dart';
 import '../providers/role_provider.dart';
 import 'route_guard.dart';
+import '../../features/rider/screens/rider_earnings_screen.dart';
+import '../../features/rider/screens/rider_history_screen.dart';
 import '../../features/rider/screens/rider_screen.dart';
 
 /// Where the app opens for a given session.
@@ -120,6 +122,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: riderLandingLocation,
         builder: (context, state) => const RiderScreen(),
+      ),
+      GoRoute(
+        path: riderHistoryLocation,
+        builder: (context, state) => const RiderHistoryScreen(),
+      ),
+      GoRoute(
+        path: riderEarningsLocation,
+        builder: (context, state) => const RiderEarningsScreen(),
       ),
       GoRoute(
         path: '/profile',
