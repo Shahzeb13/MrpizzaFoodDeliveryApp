@@ -399,14 +399,20 @@ as $$
 $$;
 
 -- The app talks to these over PostgREST /rpc, so revoke the implicit execute
--- grant from anon and re-give it only to signed-in users.
-revoke execute on function public.rider_claim_offer(uuid)        from public;
-revoke execute on function public.rider_decline_offer(uuid)      from public;
-revoke execute on function public.rider_mark_picked_up(uuid)     from public;
-revoke execute on function public.rider_complete_delivery(uuid)  from public;
-revoke execute on function public.rider_fail_delivery(uuid, text) from public;
-revoke execute on function public.rider_set_availability(text)   from public;
-revoke execute on function public.rider_deliveries()             from public;
+-- grant and re-give it only to signed-in users.
+--
+-- Revoking from `public` alone is NOT enough on Supabase. It sets default
+-- privileges that grant EXECUTE on new functions to `anon` and `authenticated`
+-- directly, so removing the PUBLIC grant leaves `anon` holding its own. That was
+-- caught in verification: has_function_privilege('anon', ...) was still true for
+-- all seven. `anon` must be revoked from by name.
+revoke execute on function public.rider_claim_offer(uuid)         from public, anon;
+revoke execute on function public.rider_decline_offer(uuid)       from public, anon;
+revoke execute on function public.rider_mark_picked_up(uuid)      from public, anon;
+revoke execute on function public.rider_complete_delivery(uuid)   from public, anon;
+revoke execute on function public.rider_fail_delivery(uuid, text) from public, anon;
+revoke execute on function public.rider_set_availability(text)    from public, anon;
+revoke execute on function public.rider_deliveries()              from public, anon;
 
 grant execute on function public.rider_claim_offer(uuid)        to authenticated;
 grant execute on function public.rider_decline_offer(uuid)      to authenticated;
