@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../core/providers/role_provider.dart';
+import '../core/routing/route_guard.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
@@ -15,8 +17,6 @@ class AppDrawer extends ConsumerStatefulWidget {
 }
 
 class _AppDrawerState extends ConsumerState<AppDrawer> {
-  int _versionTapCount = 0;
-
   /// Live profile data for the drawer header — never hardcoded.
   String get _displayName {
     final profile = ref.watch(profileFutureProvider).value;
@@ -45,6 +45,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    // Read the role inside build, not in a field initialiser: initialisers run
+    // before Riverpod assigns `ref`.
+    final isRider = ref.watch(roleProvider).valueOrNull == UserRole.rider;
+
     return Drawer(
       backgroundColor: AppColors.surface,
       width: MediaQuery.of(context).size.width * 0.80,
@@ -151,32 +155,50 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   //   trailing: _buildBadge('Rs. 0.00'),
                   //   onTap: () => _push('/wallet'),
                   // ),
-                  _buildDrawerTile(
-                    icon: Icons.stars_rounded,
-                    title: 'Loyalty Points',
-                    trailing: _buildBadge('120 Points'),
-                    onTap: () => _push('/loyalty'),
-                  ),
-                  _buildDrawerTile(
-                    icon: Icons.location_on_rounded,
-                    title: 'My Addresses',
-                    onTap: () => _push('/addresses'),
-                  ),
-                  _buildDrawerTile(
-                    icon: Icons.receipt_long_rounded,
-                    title: 'My Orders',
-                    onTap: () => _push('/my-orders'),
-                  ),
-                  _buildDrawerTile(
-                    icon: Icons.favorite_rounded,
-                    title: 'My Favourites',
-                    onTap: () => _push('/favorites'),
-                  ),
-                  _buildDrawerTile(
-                    icon: Icons.headset_mic_rounded,
-                    title: 'Support Center',
-                    onTap: () => _push('/support'),
-                  ),
+                  if (isRider) ...[
+                    _buildDrawerTile(
+                      icon: Icons.delivery_dining_rounded,
+                      title: 'My Deliveries',
+                      onTap: () => _push(riderLandingLocation),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.payments_rounded,
+                      title: 'My Earnings',
+                      onTap: () => _push(riderEarningsLocation),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.headset_mic_rounded,
+                      title: 'Support Center',
+                      onTap: () => _push('/support'),
+                    ),
+                  ] else ...[
+                    _buildDrawerTile(
+                      icon: Icons.stars_rounded,
+                      title: 'Loyalty Points',
+                      trailing: _buildBadge('120 Points'),
+                      onTap: () => _push('/loyalty'),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.location_on_rounded,
+                      title: 'My Addresses',
+                      onTap: () => _push('/addresses'),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.receipt_long_rounded,
+                      title: 'My Orders',
+                      onTap: () => _push('/my-orders'),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.favorite_rounded,
+                      title: 'My Favourites',
+                      onTap: () => _push('/favorites'),
+                    ),
+                    _buildDrawerTile(
+                      icon: Icons.headset_mic_rounded,
+                      title: 'Support Center',
+                      onTap: () => _push('/support'),
+                    ),
+                  ],
 
                   const Padding(
                     padding:
@@ -184,11 +206,12 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     child: Divider(height: 1, color: AppColors.border),
                   ),
 
-                  _buildDrawerTile(
-                    icon: Icons.person_remove_rounded,
-                    title: 'Req Account Deletion',
-                    onTap: () => _push('/delete-account'),
-                  ),
+                  if (!isRider)
+                    _buildDrawerTile(
+                      icon: Icons.person_remove_rounded,
+                      title: 'Req Account Deletion',
+                      onTap: () => _push('/delete-account'),
+                    ),
                   _buildDrawerTile(
                     icon: Icons.logout_rounded,
                     title: 'Logout',
@@ -223,9 +246,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
                   const SizedBox(height: 14),
 
-                  Column(
+                  const Column(
                     children: [
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.local_pizza_rounded,
@@ -248,29 +271,20 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 2),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          setState(() {
-                            _versionTapCount++;
-                          });
-                          if (_versionTapCount >= 3) {
-                            _versionTapCount = 0;
-                            Navigator.pop(context);
-                            context.push('/rider');
-                          }
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(
-                              vertical: 4, horizontal: 12),
-                          child: Text(
-                            'Version 1.1.8+18',
-                            style: TextStyle(
-                                fontFamily: AppTheme.fontFamily,
-                                fontSize: 10,
-                                color: AppColors.textLight),
-                          ),
+                      SizedBox(height: 2),
+                      // No hidden gesture here. Triple-tapping the version
+                      // used to push the rider dashboard, which bypassed the
+                      // role entirely: riders now reach it from the drawer
+                      // above and the route guard checks the database role.
+                      Padding(
+                        padding:
+                            EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                        child: Text(
+                          'Version 1.1.8+18',
+                          style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 10,
+                              color: AppColors.textLight),
                         ),
                       ),
                     ],
