@@ -46,3 +46,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# superpowers plan workspaces (ledger, briefs, review packages)
+.superpowers/
