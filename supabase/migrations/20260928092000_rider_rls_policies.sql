@@ -34,10 +34,24 @@ create policy "orders visible to customer rider or staff"
     )
   );
 
+-- Constrain what a customer may create, not just whose order it is. The
+-- publishable key ships inside the APK, so without this a modified app could
+-- insert a zero-total order, or one already marked delivered.
 drop policy if exists "orders customer creates own" on public.orders;
 create policy "orders customer creates own"
   on public.orders for insert to authenticated
-  with check (customer_id = (select auth.uid()));
+  with check (
+    customer_id = (select auth.uid())
+    and status = 'confirmed'
+    and coalesce(subtotal, 0) >= 0
+    and coalesce(tax, 0) >= 0
+    and coalesce(delivery_charges, 0) >= 0
+    and coalesce(discount_amount, 0) >= 0
+    and coalesce(total, 0) = coalesce(subtotal, 0)
+                       + coalesce(tax, 0)
+                       + coalesce(delivery_charges, 0)
+                       - coalesce(discount_amount, 0)
+  );
 
 -- Riders never update orders directly; the lifecycle functions do it.
 drop policy if exists "orders staff updates" on public.orders;
@@ -110,6 +124,14 @@ create policy "rider_details staff creates"
 -- No rider UPDATE policy on purpose: availability is set through
 -- rider_set_availability(), which also refuses the state changes a plain
 -- update would allow (e.g. a rider setting themselves to 'on_delivery').
+-- The panel still needs UPDATE: an owner must be able to correct a rider stuck
+-- on 'on_delivery', move a rider between branches, or take one offline.
+drop policy if exists "rider_details staff updates" on public.rider_details;
+create policy "rider_details staff updates"
+  on public.rider_details for update to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
 drop policy if exists "rider_details staff deletes" on public.rider_details;
 create policy "rider_details staff deletes"
   on public.rider_details for delete to authenticated
@@ -129,7 +151,14 @@ create policy "rider_assignments staff inserts"
   with check (public.is_staff());
 
 -- No rider UPDATE policy: rider_claim_offer / decline / picked_up /
--- complete / fail are the only paths.
+-- complete / fail are the only paths a rider has. The panel can UPDATE, because
+-- reassigning a delivery is a real thing an owner has to do.
+drop policy if exists "rider_assignments staff updates" on public.rider_assignments;
+create policy "rider_assignments staff updates"
+  on public.rider_assignments for update to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
 drop policy if exists "rider_assignments staff deletes" on public.rider_assignments;
 create policy "rider_assignments staff deletes"
   on public.rider_assignments for delete to authenticated

@@ -42,6 +42,11 @@ alter table public.rider_assignments
   add constraint rider_assignments_status_check
   check (status in ('assigned','accepted','picked_up','delivered','declined','failed'));
 
+-- Why a delivery could not be completed. Without this, rider_fail_delivery had
+-- nowhere to put the rider's explanation and the shop never learned why.
+alter table public.rider_assignments
+  add column if not exists failure_reason text;
+
 -- Delivery contact snapshot. A rider cannot read the customer's profiles or
 -- addresses row (both are own-rows-only under RLS), so the details are copied
 -- onto the order at checkout and read from there.

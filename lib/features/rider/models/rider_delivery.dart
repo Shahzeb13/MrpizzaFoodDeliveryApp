@@ -75,10 +75,16 @@ class RiderDelivery {
   /// offered to a rider as work they might take.
   bool get isHistory => !isOffer && !isActive;
 
-  /// False for orders placed before the snapshot columns existed, and for any
-  /// address the customer typed by hand without coordinates.
+  /// False when there is nothing to show a rider: no phone to call and no
+  /// address to deliver to. An order placed before the snapshot columns
+  /// existed is the case that matters. Note this is NOT about coordinates: an
+  /// address typed by hand has no coordinates but is still deliverable.
   bool get hasContactDetails =>
       customerPhone.isNotEmpty || deliveryAddress.isNotEmpty;
+
+  /// True when there is a number to dial, which is separate from having an
+  /// address — an order can be deliverable but not callable.
+  bool get hasPhoneNumber => customerPhone.trim().isNotEmpty;
 
   /// A `geo:` URI for the delivery address, or null when there are no
   /// coordinates to point at.

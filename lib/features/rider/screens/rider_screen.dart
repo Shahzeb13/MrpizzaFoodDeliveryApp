@@ -105,7 +105,7 @@ class _RiderDashboard extends ConsumerWidget {
               const SizedBox(height: 8),
               _AvailabilityToggle(availability: details.availability),
               const SizedBox(height: 20),
-              const _TodayStrip(),
+              const _TotalsStrip(),
               const SizedBox(height: 20),
               if (active != null) ...[
                 const MrSectionTitle(title: 'Current Delivery'),
@@ -222,32 +222,44 @@ class _AvailabilityToggle extends ConsumerWidget {
   }
 }
 
-class _TodayStrip extends ConsumerWidget {
-  const _TodayStrip();
+/// Lifetime totals, not today's.
+///
+/// The name said "today" and nothing anywhere filtered by date, so a rider with
+/// 40 deliveries this month read them as today's takings. The rate is shown as
+/// "Rate unavailable" rather than `Rs. 0`, because a zero is indistinguishable
+/// from not being paid.
+class _TotalsStrip extends ConsumerWidget {
+  const _TotalsStrip();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final earningsAsync = ref.watch(riderEarningsProvider);
+    final rateAsync = ref.watch(payoutRateProvider);
     final countAsync = ref.watch(riderDeliveriesProvider);
 
+    final rate = rateAsync.valueOrNull;
     final earnings = earningsAsync.valueOrNull;
     final completed = countAsync.valueOrNull == null
         ? null
         : completedCountFor(countAsync.valueOrNull!);
 
+    final earningsLabel = rate != null && rate > 0
+        ? 'Rs. ${(earnings ?? 0).toStringAsFixed(0)}'
+        : (rate == null ? '—' : 'Rate unavailable');
+
     return Row(
       children: [
         Expanded(
           child: _StatTile(
-            label: 'Deliveries completed',
+            label: 'Deliveries completed (all time)',
             value: completed == null ? '—' : '$completed',
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _StatTile(
-            label: 'Earnings',
-            value: earnings == null ? '—' : 'Rs. ${earnings.toStringAsFixed(0)}',
+            label: 'Earnings (all time)',
+            value: earningsLabel,
           ),
         ),
       ],
@@ -291,6 +303,10 @@ class _ActiveDeliveryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final action = primaryActionFor(delivery);
+    // Both buttons must lock while a transition is in flight. Without this a
+    // double-tap fires two RPCs and the second refusal ("this delivery is no
+    // longer available") appears immediately after the rider accepted it.
+    final busy = ref.watch(riderTransitionController).isLoading;
 
     return MrCard(
       child: Column(
@@ -330,21 +346,72 @@ class _ActiveDeliveryCard extends ConsumerWidget {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: () => _runAction(context, ref, action.action),
+                onPressed: busy
+                    ? null
+                    : () => _runAction(context, ref, action.action),
                 child: Text(action.label),
               ),
             ),
           ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: busy
+                  ? null
+                  : () => _reportProblem(context, ref),
+              child: const Text('Report a problem'),
+            ),
+          ),
         ],
       ),
     );
   }
 
+  Future<void> _reportProblem(BuildContext context, WidgetRef ref) async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('What went wrong?',
+                style: Theme.of(sheetContext).textTheme.titleSmall),
+            const SizedBox(height: 12),
+            for (final option in const [
+              'Customer is not answering',
+              'Customer refused the order',
+              'Customer is not at the address',
+              'Address could not be found',
+            ])
+              TextButton(
+                onPressed: () => Navigator.of(sheetContext).pop(option),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(option),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (reason == null || !context.mounted) return;
+    await _runAction(context, ref, RiderAction.fail, reason: reason);
+  }
+
   Future<void> _runAction(
     BuildContext context,
     WidgetRef ref,
-    RiderAction action,
-  ) async {
+    RiderAction action, {
+    String? reason,
+  }) async {
     final controller = ref.read(riderTransitionController.notifier);
     try {
       switch (action) {
@@ -361,10 +428,15 @@ class _ActiveDeliveryCard extends ConsumerWidget {
           await controller.declineOffer(delivery.assignmentId);
           break;
         case RiderAction.fail:
-          await controller.failDelivery(delivery.assignmentId, 'Rider could not complete');
+          await controller.failDelivery(
+              delivery.assignmentId, reason ?? 'Not specified');
           break;
       }
     } on RiderRepositoryException catch (error) {
+      // The server state is unknown after a refusal or a dropped connection,
+      // so re-read rather than leaving the rider looking at stale work.
+      ref.invalidate(riderDeliveriesProvider);
+      ref.invalidate(riderDetailsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
@@ -381,6 +453,7 @@ class _OfferCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(riderTransitionController.notifier);
+    final busy = ref.watch(riderTransitionController).isLoading;
 
     return MrCard(
       child: Column(
@@ -403,16 +476,20 @@ class _OfferCard extends ConsumerWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => _guard(context,
-                      () => controller.declineOffer(delivery.assignmentId)),
+                  onPressed: busy
+                      ? null
+                      : () => _guard(context,
+                          () => controller.declineOffer(delivery.assignmentId)),
                   child: const Text('Decline'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => _guard(context,
-                      () => controller.claimOffer(delivery.assignmentId)),
+                  onPressed: busy
+                      ? null
+                      : () => _guard(context,
+                          () => controller.claimOffer(delivery.assignmentId)),
                   child: const Text('Accept'),
                 ),
               ),
@@ -425,6 +502,10 @@ class _OfferCard extends ConsumerWidget {
 }
 
 /// The shared part of a job card: where to go and what is in the bag.
+///
+/// The branch and the bag contents render even when the contact details are
+/// missing. A rider told to "call the branch" still has to know which shop to
+/// turn up at and what to expect.
 class _DeliveryBody extends StatelessWidget {
   const _DeliveryBody({required this.delivery});
 
@@ -432,19 +513,21 @@ class _DeliveryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!delivery.hasContactDetails) {
-      return Text(
-        'Contact details unavailable — this order was placed before the app '
-        'recorded them. Call the branch.',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppColors.warning,
-            ),
-      );
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (!delivery.hasContactDetails)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Contact details unavailable — this order was placed before the '
+              'app recorded them. Call the branch.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AppColors.warning),
+            ),
+          ),
         if (delivery.deliveryAddress.isNotEmpty) ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -26,11 +26,19 @@ void main() {
 
   test('round trips through the database value', () {
     for (final availability in RiderAvailability.values) {
+      if (availability == RiderAvailability.onDelivery) continue;
       expect(
         riderAvailabilityFromDatabaseValue(
             riderAvailabilityToDatabaseValue(availability)),
         availability,
       );
     }
+  });
+
+  test('on_delivery cannot be sent to the database, only set by a transition', () {
+    expect(
+      () => riderAvailabilityToDatabaseValue(RiderAvailability.onDelivery),
+      throwsUnsupportedError,
+    );
   });
 }

@@ -537,13 +537,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    // The rider cannot read the customer's profile or address row, so the
+    // contact they need to make the delivery is frozen onto the order here.
+    //
+    // This must be awaited, not `ref.read(...).value`: reading a cold
+    // FutureProvider returns AsyncLoading, whose value is null, which silently
+    // wrote empty contact details onto every order placed before the profile
+    // happened to be cached.
+    UserProfile? customerProfile;
+    try {
+      customerProfile = await ref.read(profileFutureProvider.future);
+    } catch (_) {
+      customerProfile = null;
+    }
+    if (customerProfile == null) {
+      if (!mounted) return;
+      setState(() => _isPlacingOrder = false);
+      _showMessage(
+        'We could not load your contact details. Please try again.',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _isPlacingOrder = true);
     final totals = OrderTotals(subtotal: cart.subtotal, orderType: resolvedCheckout.orderType);
     final deliveryAddress =
         resolvedCheckout.isDelivery ? resolvedCheckout.address : null;
-    // The rider cannot read the customer's profile or address row, so the
-    // contact they need to make the delivery is frozen onto the order here.
-    final customerProfile = ref.read(profileFutureProvider).value;
     try {
       final order = Order(
         customerId: userId,
@@ -560,8 +580,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             )
             .toList(),
-        customerName: customerProfile?.fullName.trim() ?? '',
-        customerPhone: customerProfile?.phone.trim() ?? '',
+        customerName: customerProfile.fullName.trim(),
+        customerPhone: customerProfile.phone.trim(),
         deliveryAddress: deliveryAddress?.addressLine.trim() ?? '',
         deliveryLatitude: deliveryAddress?.latitude,
         deliveryLongitude: deliveryAddress?.longitude,

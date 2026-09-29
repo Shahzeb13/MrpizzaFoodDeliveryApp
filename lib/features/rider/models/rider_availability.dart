@@ -22,6 +22,11 @@ RiderAvailability riderAvailabilityFromDatabaseValue(String? rawStatus) {
 }
 
 /// The value to send to `rider_set_availability`.
+///
+/// Throws for [RiderAvailability.onDelivery]: the database refuses that value on
+/// purpose, because only the lifecycle functions may put a rider on delivery.
+/// Returning the string would have let a caller send something the database
+/// always rejects, and a round-trip test would have blessed it.
 String riderAvailabilityToDatabaseValue(RiderAvailability availability) {
   switch (availability) {
     case RiderAvailability.offline:
@@ -29,8 +34,8 @@ String riderAvailabilityToDatabaseValue(RiderAvailability availability) {
     case RiderAvailability.available:
       return 'available';
     case RiderAvailability.onDelivery:
-      // Never sent directly: only the lifecycle functions may set this, so the
-      // stored status can never disagree with the assignment the rider holds.
-      return 'on_delivery';
+      throw UnsupportedError(
+        'on_delivery is set by the lifecycle functions only',
+      );
   }
 }

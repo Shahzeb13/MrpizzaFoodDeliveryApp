@@ -1,12 +1,16 @@
 -- Rider lifecycle transitions.
 --
--- These six functions are the ONLY way a rider changes a delivery. The app
+-- These seven functions are the ONLY way a rider changes a delivery. The app
 -- receives no direct UPDATE grant on rider_assignments, rider_details or
--- orders. Each function:
+-- orders. Each transition function:
 --   1. proves the row belongs to the signed-in rider,
---   2. locks it FOR UPDATE so two racing taps cannot both win,
---   3. refuses the transition if the current status is not the expected one,
---   4. writes every related row in the same transaction.
+--   2. locks the assignment AND the rider's own detail row FOR UPDATE, so two
+--      racing taps cannot both win and a check-then-update cannot interleave,
+--   3. refuses the transition if the current assignment status is not the one
+--      this function expects,
+--   4. refuses the transition if the ORDER's own status has moved on, so a
+--      cancelled order cannot be resurrected by a rider,
+--   5. writes every related row in the same transaction.
 
 create or replace function public.rider_claim_offer(p_assignment_id uuid)
 returns public.rider_assignments
@@ -32,6 +36,22 @@ begin
     raise exception 'This delivery is no longer available'
       using errcode = 'P0002';
   end if;
+
+  -- The dashboard only ever shows one active job, so refuse a second one here
+  -- with a readable message rather than letting the unique index fail with a
+  -- Postgres constraint string.
+  if exists (
+    select 1 from public.rider_assignments
+     where rider_id = v_row.rider_id
+       and status in ('accepted', 'picked_up')
+  ) then
+    raise exception 'Finish your current delivery first'
+      using errcode = 'P0002';
+  end if;
+
+  perform 1 from public.rider_details
+   where profile_id = v_row.rider_id
+   for update;
 
   update public.rider_assignments
      set status = 'accepted'
@@ -76,12 +96,12 @@ begin
    where id = v_row.id
   returning * into v_row;
 
-  update public.rider_details
-     set status = 'available'
-   where profile_id = v_row.rider_id;
-
-  -- orders.status is deliberately untouched: the order stays claimable so the
-  -- panel can assign somebody else.
+  -- rider_details is deliberately NOT touched. Declining one offer says nothing
+  -- about whether the rider wants work, and flipping them to 'available' here
+  -- would silently put an offline rider online.
+  --
+  -- orders.status is also untouched: the order stays claimable so the panel can
+  -- assign somebody else.
   return v_row;
 end;
 $$;
@@ -94,6 +114,7 @@ set search_path to 'public'
 as $$
 declare
   v_row public.rider_assignments;
+  v_order_status text;
 begin
   select * into v_row
     from public.rider_assignments
@@ -108,6 +129,17 @@ begin
 
   if v_row.status <> 'accepted' then
     raise exception 'Accept this delivery before marking it picked up'
+      using errcode = 'P0002';
+  end if;
+
+  select o.status into v_order_status
+    from public.orders o
+   where o.id = v_row.order_id
+     for update;
+
+  if v_order_status is distinct from 'confirmed'
+     and v_order_status is distinct from 'in_kitchen' then
+    raise exception 'This order is no longer being delivered'
       using errcode = 'P0002';
   end if;
 
@@ -136,6 +168,7 @@ set search_path to 'public'
 as $$
 declare
   v_row public.rider_assignments;
+  v_order_status text;
 begin
   select * into v_row
     from public.rider_assignments
@@ -153,6 +186,20 @@ begin
       using errcode = 'P0002';
   end if;
 
+  select o.status into v_order_status
+    from public.orders o
+   where o.id = v_row.order_id
+     for update;
+
+  if v_order_status is distinct from 'out_for_delivery' then
+    raise exception 'This order is no longer being delivered'
+      using errcode = 'P0002';
+  end if;
+
+  perform 1 from public.rider_details
+   where profile_id = v_row.rider_id
+   for update;
+
   update public.rider_assignments
      set status       = 'delivered',
          delivered_at = now()
@@ -166,8 +213,9 @@ begin
   insert into public.order_status_history (order_id, status, changed_by)
   values (v_row.order_id, 'delivered', (select auth.uid()));
 
+  -- Free the rider, but respect a rider who went offline while they were out.
   update public.rider_details
-     set status = 'available'
+     set status = case when status = 'offline' then 'offline' else 'available' end
    where profile_id = v_row.rider_id;
 
   return v_row;
@@ -185,6 +233,7 @@ set search_path to 'public'
 as $$
 declare
   v_row public.rider_assignments;
+  v_order_status text;
 begin
   select * into v_row
     from public.rider_assignments
@@ -202,8 +251,26 @@ begin
       using errcode = 'P0002';
   end if;
 
+  select o.status into v_order_status
+    from public.orders o
+   where o.id = v_row.order_id
+     for update;
+
+  -- Never drag a cancelled or already delivered order backwards to 'confirmed'.
+  if v_order_status is distinct from 'confirmed'
+     and v_order_status is distinct from 'in_kitchen'
+     and v_order_status is distinct from 'out_for_delivery' then
+    raise exception 'This order is no longer being delivered'
+      using errcode = 'P0002';
+  end if;
+
+  perform 1 from public.rider_details
+   where profile_id = v_row.rider_id
+   for update;
+
   update public.rider_assignments
-     set status = 'failed'
+     set status         = 'failed',
+         failure_reason = nullif(trim(coalesce(p_reason, '')), '')
    where id = v_row.id
   returning * into v_row;
 
@@ -216,7 +283,7 @@ begin
   values (v_row.order_id, 'confirmed', (select auth.uid()));
 
   update public.rider_details
-     set status = 'available'
+     set status = case when status = 'offline' then 'offline' else 'available' end
    where profile_id = v_row.rider_id;
 
   return v_row;
@@ -240,10 +307,16 @@ begin
       using errcode = 'P0002';
   end if;
 
-  if not exists (
-    select 1 from public.rider_details
-    where profile_id = (select auth.uid())
-  ) then
+  -- Lock the rider's own row FIRST, then re-check the active job under that
+  -- lock. Checking and then updating without a lock lets a concurrent
+  -- rider_claim_offer commit between the two and leave the rider holding a job
+  -- while the database says they are free.
+  select * into v_row
+    from public.rider_details
+   where profile_id = (select auth.uid())
+   for update;
+
+  if not found then
     raise exception 'Your rider account is not set up yet'
       using errcode = 'P0002';
   end if;
@@ -259,28 +332,12 @@ begin
 
   update public.rider_details
      set status = p_status
-   where profile_id = (select auth.uid())
+   where profile_id = v_row.profile_id
   returning * into v_row;
 
   return v_row;
 end;
 $$;
-
--- The app talks to these over PostgREST /rpc, so revoke the implicit execute
--- grant from anon and re-give it only to signed-in users.
-revoke execute on function public.rider_claim_offer(uuid)      from public;
-revoke execute on function public.rider_decline_offer(uuid)    from public;
-revoke execute on function public.rider_mark_picked_up(uuid)   from public;
-revoke execute on function public.rider_complete_delivery(uuid) from public;
-revoke execute on function public.rider_fail_delivery(uuid, text) from public;
-revoke execute on function public.rider_set_availability(text) from public;
-
-grant execute on function public.rider_claim_offer(uuid)      to authenticated;
-grant execute on function public.rider_decline_offer(uuid)    to authenticated;
-grant execute on function public.rider_mark_picked_up(uuid)   to authenticated;
-grant execute on function public.rider_complete_delivery(uuid) to authenticated;
-grant execute on function public.rider_fail_delivery(uuid, text) to authenticated;
-grant execute on function public.rider_set_availability(text) to authenticated;
 
 -- The rider's own assignments, joined to the order contact snapshot and the
 -- branch. Read-only: this is the only read a rider makes on their work, and it
@@ -303,7 +360,8 @@ returns table (
   item_count         bigint,
   assigned_at        timestamptz,
   picked_up_at       timestamptz,
-  delivered_at       timestamptz
+  delivered_at       timestamptz,
+  failure_reason     text
 )
 language sql
 stable
@@ -331,7 +389,8 @@ as $$
     (select count(*) from public.order_items oi where oi.order_id = o.id),
     ra.assigned_at,
     ra.picked_up_at,
-    ra.delivered_at
+    ra.delivered_at,
+    ra.failure_reason
   from public.rider_assignments ra
   join public.orders o   on o.id = ra.order_id
   join public.branches b on b.id = o.branch_id
@@ -339,5 +398,20 @@ as $$
   order by ra.assigned_at desc;
 $$;
 
-revoke execute on function public.rider_deliveries() from public;
-grant execute on function public.rider_deliveries() to authenticated;
+-- The app talks to these over PostgREST /rpc, so revoke the implicit execute
+-- grant from anon and re-give it only to signed-in users.
+revoke execute on function public.rider_claim_offer(uuid)        from public;
+revoke execute on function public.rider_decline_offer(uuid)      from public;
+revoke execute on function public.rider_mark_picked_up(uuid)     from public;
+revoke execute on function public.rider_complete_delivery(uuid)  from public;
+revoke execute on function public.rider_fail_delivery(uuid, text) from public;
+revoke execute on function public.rider_set_availability(text)   from public;
+revoke execute on function public.rider_deliveries()             from public;
+
+grant execute on function public.rider_claim_offer(uuid)        to authenticated;
+grant execute on function public.rider_decline_offer(uuid)      to authenticated;
+grant execute on function public.rider_mark_picked_up(uuid)     to authenticated;
+grant execute on function public.rider_complete_delivery(uuid)  to authenticated;
+grant execute on function public.rider_fail_delivery(uuid, text) to authenticated;
+grant execute on function public.rider_set_availability(text)   to authenticated;
+grant execute on function public.rider_deliveries()             to authenticated;
