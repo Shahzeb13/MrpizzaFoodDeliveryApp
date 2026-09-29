@@ -5,7 +5,6 @@ import 'package:mrpizza/core/theme/app_theme.dart';
 import 'package:mrpizza/features/rider/data/rider_repository.dart';
 import 'package:mrpizza/features/rider/models/rider_availability.dart';
 import 'package:mrpizza/features/rider/models/rider_delivery.dart';
-import 'package:mrpizza/features/rider/providers/rider_providers.dart';
 import 'package:mrpizza/features/rider/screens/rider_earnings_screen.dart';
 import 'package:mrpizza/features/rider/screens/rider_history_screen.dart';
 
