@@ -281,3 +281,63 @@ grant execute on function public.rider_mark_picked_up(uuid)   to authenticated;
 grant execute on function public.rider_complete_delivery(uuid) to authenticated;
 grant execute on function public.rider_fail_delivery(uuid, text) to authenticated;
 grant execute on function public.rider_set_availability(text) to authenticated;
+
+-- The rider's own assignments, joined to the order contact snapshot and the
+-- branch. Read-only: this is the only read a rider makes on their work, and it
+-- is scoped to the signed-in rider in the WHERE clause rather than relying on
+-- the caller's RLS.
+create or replace function public.rider_deliveries()
+returns table (
+  assignment_id      uuid,
+  assignment_status  text,
+  order_id           uuid,
+  bill_number        text,
+  customer_name      text,
+  customer_phone     text,
+  delivery_address   text,
+  delivery_latitude  numeric,
+  delivery_longitude numeric,
+  branch_name        text,
+  branch_address     text,
+  item_summary       text,
+  item_count         bigint,
+  assigned_at        timestamptz,
+  picked_up_at       timestamptz,
+  delivered_at       timestamptz
+)
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  select
+    ra.id,
+    ra.status,
+    o.id,
+    o.bill_serial_number,
+    o.customer_name,
+    o.customer_phone,
+    o.delivery_address,
+    o.delivery_latitude,
+    o.delivery_longitude,
+    b.name,
+    b.address,
+    coalesce((
+      select string_agg(oi.quantity || 'x ' || mi.name, ', ' order by mi.name)
+        from public.order_items oi
+        join public.menu_items mi on mi.id = oi.menu_item_id
+       where oi.order_id = o.id
+    ), ''),
+    (select count(*) from public.order_items oi where oi.order_id = o.id),
+    ra.assigned_at,
+    ra.picked_up_at,
+    ra.delivered_at
+  from public.rider_assignments ra
+  join public.orders o   on o.id = ra.order_id
+  join public.branches b on b.id = o.branch_id
+  where ra.rider_id = (select auth.uid())
+  order by ra.assigned_at desc;
+$$;
+
+revoke execute on function public.rider_deliveries() from public;
+grant execute on function public.rider_deliveries() to authenticated;
