@@ -37,9 +37,16 @@ void main() {
   });
 
   test('an order placed before the snapshot has no usable contact details', () {
-    final delivery = RiderDelivery.fromAssignmentRow(
-      _row(customerName: null, customerPhone: null, deliveryAddress: null),
-    );
+    // Every snapshot column is null on an order placed before the migration,
+    // coordinates included.
+    final delivery = RiderDelivery.fromAssignmentRow({
+      ..._row(),
+      'customer_name': null,
+      'customer_phone': null,
+      'delivery_address': null,
+      'delivery_latitude': null,
+      'delivery_longitude': null,
+    });
     expect(delivery.hasContactDetails, isFalse);
     expect(delivery.customerName, '');
     expect(delivery.deliveryAddress, '');
