@@ -63,6 +63,17 @@ class Order {
   final OrderTotals totals;
   final List<OrderItem> items;
 
+  /// The delivery contact, copied here at checkout. A rider has no access to the
+  /// customer's `profiles` or `addresses` row, so these are the only copy of
+  /// who to call and where to go. They also freeze what was actually ordered: a
+  /// customer can edit their saved address afterwards, and the rider must still
+  /// be sent to the address the order was placed with.
+  final String customerName;
+  final String customerPhone;
+  final String deliveryAddress;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
+
   const Order({
     required this.customerId,
     required this.branchId,
@@ -71,6 +82,11 @@ class Order {
     required this.totals,
     required this.items,
     this.status = 'confirmed',
+    this.customerName = '',
+    this.customerPhone = '',
+    this.deliveryAddress = '',
+    this.deliveryLatitude,
+    this.deliveryLongitude,
   });
 
   /// Row to insert into `orders` on checkout confirmation.
@@ -90,6 +106,11 @@ class Order {
       'tax': totals.tax,
       'delivery_charges': totals.deliveryFee,
       'total': totals.total,
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'delivery_address': deliveryAddress,
+      'delivery_latitude': deliveryLatitude,
+      'delivery_longitude': deliveryLongitude,
     };
   }
 }

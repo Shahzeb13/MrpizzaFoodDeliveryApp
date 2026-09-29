@@ -539,11 +539,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     setState(() => _isPlacingOrder = true);
     final totals = OrderTotals(subtotal: cart.subtotal, orderType: resolvedCheckout.orderType);
+    final deliveryAddress =
+        resolvedCheckout.isDelivery ? resolvedCheckout.address : null;
+    // The rider cannot read the customer's profile or address row, so the
+    // contact they need to make the delivery is frozen onto the order here.
+    final customerProfile = ref.read(profileFutureProvider).value;
     try {
       final order = Order(
         customerId: userId,
         branchId: branch.id,
-        addressId: resolvedCheckout.isDelivery ? resolvedCheckout.address!.id : null,
+        addressId: deliveryAddress?.id,
         orderType: resolvedCheckout.orderType,
         totals: totals,
         items: cart.items
@@ -555,6 +560,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             )
             .toList(),
+        customerName: customerProfile?.fullName.trim() ?? '',
+        customerPhone: customerProfile?.phone.trim() ?? '',
+        deliveryAddress: deliveryAddress?.addressLine.trim() ?? '',
+        deliveryLatitude: deliveryAddress?.latitude,
+        deliveryLongitude: deliveryAddress?.longitude,
       );
       await ref.read(ordersRepositoryProvider).placeOrder(order);
     } catch (e) {
