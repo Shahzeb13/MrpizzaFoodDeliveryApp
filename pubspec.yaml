@@ -49,6 +49,10 @@ dependencies:
   geolocator: ^14.0.3
   http: ^1.2.0
 
+  # Rider hands-off: dialling the customer and opening the delivery address
+  # in whatever maps app the phone has.
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

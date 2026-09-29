@@ -1,956 +1,633 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../core/theme/widgets.dart';
-import '../../../widgets/shared_components.dart';
-import '../../orders/providers/order_flow_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class RiderScreen extends ConsumerStatefulWidget {
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/widgets.dart';
+import '../data/rider_repository.dart';
+import '../logic/delivery_actions.dart';
+import '../models/rider_availability.dart';
+import '../models/rider_delivery.dart';
+import '../providers/rider_providers.dart';
+import 'rider_earnings_screen.dart';
+import 'rider_history_screen.dart';
+
+/// The rider's working screen: availability, the job in hand, anything waiting
+/// to be accepted, and a peek at recent deliveries.
+///
+/// Every value on this screen comes from the database. The previous version of
+/// this file was 956 lines of invented data with no database access at all.
+class RiderScreen extends ConsumerWidget {
   const RiderScreen({super.key});
 
   @override
-  ConsumerState<RiderScreen> createState() => _RiderScreenState();
-}
-
-enum DeliveryStep {
-  newOffer,
-  accepted,
-  pickedUp,
-  delivered,
-}
-
-class _RiderScreenState extends ConsumerState<RiderScreen> {
-  bool isOnline = true;
-  DeliveryStep currentStep = DeliveryStep.accepted;
-  double todayEarnings = 2450.0;
-  int completedCount = 8;
-  DemoOrder? _justDeliveredOrder;
-
-  final List<Map<String, String>> completedDeliveries = [
-    {
-      'id': '#MP-84910',
-      'customer': 'Usama Khan',
-      'address': 'Mandian, Abbottabad',
-      'time': '1:45 PM',
-      'payout': 'Rs. 250',
-    },
-    {
-      'id': '#MP-73921',
-      'customer': 'Hamza Ahmed',
-      'address': 'Jinnahabad, Abbottabad',
-      'time': '12:30 PM',
-      'payout': 'Rs. 220',
-    },
-    {
-      'id': '#MP-62019',
-      'customer': 'Saad Malik',
-      'address': 'Pine City, Abbottabad',
-      'time': '11:15 AM',
-      'payout': 'Rs. 300',
-    },
-  ];
-
-  void _acceptOrder(DemoOrder order) {
-    ref.read(orderFlowProvider.notifier).acceptOrder(order.id);
-    showTopCartToast(context, 'Job Accepted! Proceed to Kitchen.');
-  }
-
-  void _rejectOrder(DemoOrder order) {
-    ref.read(orderFlowProvider.notifier).rejectOrder(order.id);
-    showTopCartToast(context, 'Offer Rejected. Finding another rider...');
-  }
-
-  void _pickupOrder(DemoOrder order) {
-    ref.read(orderFlowProvider.notifier).pickupOrder(order.id);
-    showTopCartToast(
-        context, 'Order Picked Up! Head to ${order.deliveryAddress}.');
-  }
-
-  void _completeOrder(DemoOrder order) {
-    final points =
-        ref.read(orderFlowProvider.notifier).completeOrder(order.id);
-    setState(() {
-      todayEarnings += 250;
-      completedCount += 1;
-      _justDeliveredOrder = order;
-      completedDeliveries.insert(0, {
-        'id': order.id,
-        'customer': order.customerName,
-        'address': order.deliveryAddress,
-        'time': 'Just Now',
-        'payout': 'Rs. 250',
-      });
-    });
-    showTopCartToast(
-      context,
-      'Delivery Completed! Rs. 250 payout credited. +$points loyalty points awarded!',
-    );
-  }
-
-  void _advanceDeliveryStep() {
-    setState(() {
-      if (currentStep == DeliveryStep.newOffer) {
-        currentStep = DeliveryStep.accepted;
-        showTopCartToast(context, 'Job Accepted! Proceed to Kitchen.');
-      } else if (currentStep == DeliveryStep.accepted) {
-        currentStep = DeliveryStep.pickedUp;
-        showTopCartToast(
-            context, 'Order Picked Up! Head to COMSATS Abbottabad.');
-      } else if (currentStep == DeliveryStep.pickedUp) {
-        currentStep = DeliveryStep.delivered;
-        todayEarnings += 250;
-        completedCount += 1;
-        completedDeliveries.insert(0, {
-          'id': '#MP-98420',
-          'customer': 'Aalyan Mughal',
-          'address': 'COMSATS Abbottabad, Hostel 3',
-          'time': 'Just Now',
-          'payout': 'Rs. 250',
-        });
-        showTopCartToast(context, 'Delivery Completed! Rs. 250 added.');
-      } else if (currentStep == DeliveryStep.delivered) {
-        currentStep = DeliveryStep.newOffer;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final allOrders = ref.watch(orderFlowProvider);
-    final activeDelivery = allOrders.cast<DemoOrder?>().firstWhere(
-          (o) =>
-              o?.status == DemoOrderStatus.accepted ||
-              o?.status == DemoOrderStatus.pickedUp,
-          orElse: () => null,
-        );
-    final pendingOffers = allOrders
-        .where(
-          (o) =>
-              o.status == DemoOrderStatus.pending ||
-              o.status == DemoOrderStatus.assigned,
-        )
-        .toList();
-    final hasActiveTask = isOnline &&
-        (activeDelivery != null ||
-            (currentStep != DeliveryStep.delivered &&
-                currentStep != DeliveryStep.newOffer));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detailsAsync = ref.watch(riderDetailsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-        ),
         title: const Text('Rider Dashboard'),
         actions: [
-          // Online Status Badge & Switch
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isOnline
-                  ? const Color(0xFFE4F1E8)
-                  : AppColors.sand,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: isOnline
-                    ? AppColors.success.withValues(alpha: 0.4)
-                    : AppColors.borderDeep,
+          IconButton(
+            tooltip: 'My deliveries',
+            icon: const Icon(Icons.receipt_long_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const RiderHistoryScreen(),
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color:
-                        isOnline ? AppColors.success : AppColors.textLight,
-                    shape: BoxShape.circle,
-                  ),
+          ),
+          IconButton(
+            tooltip: 'My earnings',
+            icon: const Icon(Icons.payments_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const RiderEarningsScreen(),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: detailsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _RiderMessage(
+          message: 'Could not load your rider account.',
+          detail: '$error',
+          onRetry: () => ref.invalidate(riderDetailsProvider),
+        ),
+        data: (details) {
+          if (details == null) {
+            return const _RiderMessage(
+              message: 'Your rider account is not set up yet.',
+              detail:
+                  'Ask the branch to add you, then pull down to refresh. '
+                  'Nothing you do here will be visible to the shop until then.',
+            );
+          }
+          return _RiderDashboard(details: details);
+        },
+      ),
+    );
+  }
+}
+
+class _RiderDashboard extends ConsumerWidget {
+  const _RiderDashboard({required this.details});
+
+  final RiderDetails details;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deliveriesAsync = ref.watch(riderDeliveriesProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(riderDeliveriesProvider);
+        ref.invalidate(riderDetailsProvider);
+        ref.invalidate(riderEarningsProvider);
+        await ref.read(riderDeliveriesProvider.future);
+      },
+      child: deliveriesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _RiderMessage(
+          message: 'Could not load your deliveries.',
+          detail: '$error',
+          onRetry: () => ref.invalidate(riderDeliveriesProvider),
+        ),
+        data: (deliveries) {
+          final offers = pendingOffersFor(deliveries);
+          final active = activeDeliveryFor(deliveries);
+          final history = deliveredHistoryFor(deliveries);
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            children: [
+              const SizedBox(height: 8),
+              _AvailabilityToggle(availability: details.availability),
+              const SizedBox(height: 20),
+              const _TodayStrip(),
+              const SizedBox(height: 20),
+              if (active != null) ...[
+                const MrSectionTitle(title: 'Current Delivery'),
+                const SizedBox(height: 12),
+                _ActiveDeliveryCard(delivery: active),
+                const SizedBox(height: 24),
+              ],
+              if (offers.isNotEmpty) ...[
+                const MrSectionTitle(title: 'Waiting for you'),
+                const SizedBox(height: 12),
+                ...offers.map((offer) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _OfferCard(delivery: offer),
+                    )),
+                const SizedBox(height: 14),
+              ],
+              if (active == null && offers.isEmpty) ...[
+                const SizedBox(height: 12),
+                const _RiderMessage(
+                  message: 'No deliveries waiting',
+                  detail:
+                      'When the shop assigns you an order it will appear here.',
                 ),
-                const SizedBox(width: 6),
+              ],
+              if (history.isNotEmpty) ...[
+                const MrSectionTitle(title: 'Recent deliveries'),
+                const SizedBox(height: 12),
+                ...history
+                    .take(3)
+                    .map((delivery) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _HistoryRow(delivery: delivery),
+                        )),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The go online / go offline control. A refusal from the database — most often
+/// "Finish your current delivery first" — is shown in the rider's own words.
+class _AvailabilityToggle extends ConsumerWidget {
+  const _AvailabilityToggle({required this.availability});
+
+  final RiderAvailability availability;
+
+  bool get isAvailable => availability == RiderAvailability.available;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isBusy = ref.watch(riderAvailabilityController).isLoading;
+
+    return MrCard(
+      child: Row(
+        children: [
+          MrIconWell(
+            icon: isAvailable
+                ? Icons.bolt_rounded
+                : Icons.power_settings_new_rounded,
+            color: isAvailable ? AppColors.success : AppColors.textSecondary,
+            background: isAvailable ? AppColors.primaryTint : AppColors.sand,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  isOnline ? 'ONLINE' : 'OFFLINE',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                    color:
-                        isOnline ? AppColors.success : AppColors.textSecondary,
-                    fontFamily: AppTheme.fontFamily,
-                  ),
+                  isAvailable ? 'You are online' : 'You are offline',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  availability == RiderAvailability.onDelivery
+                      ? 'Finish the delivery in hand first.'
+                      : isAvailable
+                          ? 'The shop can assign you orders.'
+                          : 'You will not be given new orders.',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Stats Cards Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      label: 'Today\'s Earnings',
-                      value: 'Rs. ${todayEarnings.toStringAsFixed(0)}',
-                      icon: Icons.account_balance_wallet_rounded,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildStatCard(
-                      label: 'Completed',
-                      value: '$completedCount Jobs',
-                      icon: Icons.check_circle_rounded,
-                      color: AppColors.success,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildStatCard(
-                      label: 'Rating',
-                      value: '4.95',
-                      icon: Icons.star_rounded,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Active Delivery Task Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const MrSectionTitle(
-                    title: 'Current Delivery Task',
-                  ),
-                  if (hasActiveTask)
-                    const MrEyebrow(
-                      text: 'En Route',
-                      background: AppColors.primaryTint,
-                      foreground: AppColors.primaryDark,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // Active Task Card Logic
-              if (!isOnline)
-                _buildOfflineCard()
-              else if (_justDeliveredOrder != null)
-                _buildDeliveredSuccessCard(_justDeliveredOrder)
-              else if (activeDelivery != null)
-                _buildActiveOrderCard(activeDelivery)
-              else if (pendingOffers.isNotEmpty)
-                Column(
-                  children: pendingOffers
-                      .map((offer) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildNewOfferCard(offer),
-                          ))
-                      .toList(),
-                )
-              else if (currentStep == DeliveryStep.delivered)
-                _buildDeliveredSuccessCard(null)
-              else if (currentStep == DeliveryStep.newOffer)
-                _buildDefaultNewOfferCard()
-              else
-                _buildDefaultActiveOrderCard(),
-
-              const SizedBox(height: 26),
-
-              // Completed Deliveries Log
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const MrSectionTitle(title: 'Recent Deliveries'),
-                  Text(
-                    'Today',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              ...completedDeliveries.map((item) => _buildHistoryTile(item)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return MrCard(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          MrIconWell(icon: icon, color: color, size: 18),
-          const SizedBox(height: 12),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.titleSmall,
+          const SizedBox(width: 8),
+          if (availability != RiderAvailability.onDelivery)
+            FilledButton(
+              onPressed: isBusy
+                  ? null
+                  : () => _toggleAvailability(context, ref),
+              child: Text(isAvailable ? 'Go Offline' : 'Go Online'),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildOfflineCard() {
-    return MrCard(
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        children: [
-          const MrIconWell(
-            icon: Icons.power_settings_new_rounded,
-            color: AppColors.textSecondary,
-            background: AppColors.sand,
-            size: 28,
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'You are Offline',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Switch duty to ONLINE at the top right to start receiving orders.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
+  Future<void> _toggleAvailability(BuildContext context, WidgetRef ref) async {
+    final controller = ref.read(riderAvailabilityController.notifier);
+    try {
+      if (isAvailable) {
+        await controller.goOffline();
+      } else {
+        await controller.goOnline();
+      }
+    } on RiderRepositoryException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
+}
 
-  Widget _buildDeliveredSuccessCard(DemoOrder? order) {
-    return MrDoubleBezel(
-      radius: 24,
-      innerColor: const Color(0xFFE4F1E8),
-      child: Column(
-        children: [
-          const MrIconWell(
-            icon: Icons.check_circle_rounded,
-            color: AppColors.success,
-            background: Color(0xFFD0E8D8),
-            size: 32,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Order Delivered Successfully!',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            order != null
-                ? 'Payout of Rs. 250 credited. +${order.pointsEarned} loyalty points awarded.'
-                : 'Payout of Rs. 250 has been credited.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _justDeliveredOrder = null;
-                  currentStep = DeliveryStep.newOffer;
-                });
-              },
-              child: const Text('Ready for Next Delivery'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _TodayStrip extends ConsumerWidget {
+  const _TodayStrip();
 
-  Widget _buildNewOfferCard(DemoOrder order) {
-    return MrCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const MrEyebrow(
-                text: 'New Offer',
-                background: AppColors.goldTint,
-                foreground: Color(0xFF9A6B1F),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 2),
-                child: Text(
-                  'Payout: Rs. 250',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(color: AppColors.success),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Order ${order.id}',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Pickup: ${order.branchName} -> Dropoff: ${order.deliveryAddress}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Items: ${order.itemsSummary} (Rs. ${order.total.toInt()})',
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _rejectOrder(order),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Colors.redAccent),
-                  ),
-                  child: const Text('Reject Offer'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: ElevatedButton(
-                  onPressed: () => _acceptOrder(order),
-                  child: const Text('Accept Order Offer'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final earningsAsync = ref.watch(riderEarningsProvider);
+    final countAsync = ref.watch(riderDeliveriesProvider);
 
-  Widget _buildDefaultNewOfferCard() {
-    return MrCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const MrEyebrow(
-                text: 'New Offer',
-                background: AppColors.goldTint,
-                foreground: Color(0xFF9A6B1F),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 2),
-                child: Text(
-                  'Payout: Rs. 250',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(color: AppColors.success),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Order #MP-98420',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Pickup: Supply Bazaar -> Dropoff: COMSATS Abbottabad',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _advanceDeliveryStep,
-              child: const Text('Accept Order Offer'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final earnings = earningsAsync.valueOrNull;
+    final completed = countAsync.valueOrNull == null
+        ? null
+        : completedCountFor(countAsync.valueOrNull!);
 
-  Widget _buildActiveOrderCard(DemoOrder order) {
-    final isAccepted = order.status == DemoOrderStatus.accepted;
-    return MrCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Order ID & Payout Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Order ${order.id}',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(
-                'Payout: Rs. 250',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(color: AppColors.success),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Route Timeline
-          _buildRouteRow(
-            isPickup: true,
-            title: 'Pickup: ${order.branchName}',
-            subtitle: 'Mr. Pizza Kitchen',
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 7),
-            child: Container(
-              width: 2,
-              height: 16,
-              color: AppColors.borderDeep,
-            ),
-          ),
-          _buildRouteRow(
-            isPickup: false,
-            title: 'Dropoff: ${order.customerName}',
-            subtitle: order.deliveryAddress,
-          ),
-
-          const MrFadeDivider(),
-          const SizedBox(height: 16),
-
-          // Order Items & Payment
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Items (${order.items.length})',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      order.itemsSummary,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.textPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Cash to Collect',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Rs. ${order.total.toInt()}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: AppColors.warning),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          // Call & Maps Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    showTopCartToast(
-                        context, 'Calling customer ${order.customerPhone}...');
-                  },
-                  icon: const Icon(Icons.phone,
-                      size: 16, color: AppColors.primary),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Call Customer'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    showTopCartToast(
-                        context, 'Opening Maps Navigation to ${order.deliveryAddress}...');
-                  },
-                  icon: const Icon(Icons.navigation_rounded,
-                      size: 16, color: Colors.white),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Navigation'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 14),
-
-          // Primary State CTA Action Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (isAccepted) {
-                  _pickupOrder(order);
-                } else {
-                  _completeOrder(order);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isAccepted ? AppColors.warning : AppColors.success,
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  isAccepted
-                      ? 'Confirm Picked Up from Kitchen'
-                      : 'Mark Delivered & Collect Cash',
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDefaultActiveOrderCard() {
-    return MrCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: BorderRadius.circular(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Order #MP-98420',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(
-                'Payout: Rs. 250',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(color: AppColors.success),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildRouteRow(
-            isPickup: true,
-            title: 'Pickup: Mr. Pizza Main Kitchen',
-            subtitle: 'Supply Bazaar, Abbottabad',
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 7),
-            child: Container(
-              width: 2,
-              height: 16,
-              color: AppColors.borderDeep,
-            ),
-          ),
-          _buildRouteRow(
-            isPickup: false,
-            title: 'Dropoff: Aalyan Mughal',
-            subtitle: 'COMSATS Abbottabad, Hostel 3, Room 204',
-          ),
-          const MrFadeDivider(),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Items (3)',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Fajita Pizza, Garlic Knots, Pepsi',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: AppColors.textPrimary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Cash to Collect',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Rs. 1,600',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(color: AppColors.warning),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    showTopCartToast(
-                        context, 'Calling customer +923316290108...');
-                  },
-                  icon: const Icon(Icons.phone,
-                      size: 16, color: AppColors.primary),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Call Customer'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    showTopCartToast(
-                        context, 'Opening Abbottabad Maps Navigation...');
-                  },
-                  icon: const Icon(Icons.navigation_rounded,
-                      size: 16, color: Colors.white),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Navigation'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _advanceDeliveryStep,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: currentStep == DeliveryStep.accepted
-                    ? AppColors.warning
-                    : AppColors.success,
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  currentStep == DeliveryStep.accepted
-                      ? 'Confirm Picked Up from Kitchen'
-                      : 'Mark Delivered & Collect Cash',
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRouteRow({
-    required bool isPickup,
-    required String title,
-    required String subtitle,
-  }) {
-    final color = isPickup ? AppColors.warning : AppColors.success;
     return Row(
       children: [
-        Container(
-          width: 16,
-          height: 16,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.15),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-            ),
+        Expanded(
+          child: _StatTile(
+            label: 'Deliveries completed',
+            value: completed == null ? '—' : '$completed',
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          child: _StatTile(
+            label: 'Earnings',
+            value: earnings == null ? '—' : 'Rs. ${earnings.toStringAsFixed(0)}',
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildHistoryTile(Map<String, String> item) {
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
     return MrCard(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      borderRadius: BorderRadius.circular(16),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: const BoxDecoration(
-              color: Color(0xFFE4F1E8),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_rounded,
-                color: AppColors.success, size: 14),
+          Text(
+            value,
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(color: AppColors.textPrimary),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      item['id']!,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '• ${item['customer']!}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-                Text(
-                  item['address']!,
-                  style: Theme.of(context).textTheme.labelMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          const SizedBox(height: 4),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveDeliveryCard extends ConsumerWidget {
+  const _ActiveDeliveryCard({required this.delivery});
+
+  final RiderDelivery delivery;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final action = primaryActionFor(delivery);
+
+    return MrCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Text(
-                item['payout']!,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall
-                    ?.copyWith(color: AppColors.success),
+              Expanded(
+                child: Text(
+                  delivery.customerName.isEmpty
+                      ? 'Delivery ${delivery.billNumber}'
+                      : delivery.customerName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
-              Text(
-                item['time']!,
-                style: Theme.of(context).textTheme.labelSmall,
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTint,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  delivery.billNumber,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _DeliveryBody(delivery: delivery),
+          const SizedBox(height: 14),
+          _ContactActions(delivery: delivery),
+          if (action != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: () => _runAction(context, ref, action.action),
+                child: Text(action.label),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runAction(
+    BuildContext context,
+    WidgetRef ref,
+    RiderAction action,
+  ) async {
+    final controller = ref.read(riderTransitionController.notifier);
+    try {
+      switch (action) {
+        case RiderAction.markPickedUp:
+          await controller.markPickedUp(delivery.assignmentId);
+          break;
+        case RiderAction.complete:
+          await controller.completeDelivery(delivery.assignmentId);
+          break;
+        case RiderAction.accept:
+          await controller.claimOffer(delivery.assignmentId);
+          break;
+        case RiderAction.decline:
+          await controller.declineOffer(delivery.assignmentId);
+          break;
+        case RiderAction.fail:
+          await controller.failDelivery(delivery.assignmentId, 'Rider could not complete');
+          break;
+      }
+    } on RiderRepositoryException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
+}
+
+class _OfferCard extends ConsumerWidget {
+  const _OfferCard({required this.delivery});
+
+  final RiderDelivery delivery;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(riderTransitionController.notifier);
+
+    return MrCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(delivery.billNumber,
+                    style: Theme.of(context).textTheme.titleSmall),
+              ),
+              Text('New order',
+                  style: Theme.of(context).textTheme.labelSmall),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _DeliveryBody(delivery: delivery),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => _guard(context,
+                      () => controller.declineOffer(delivery.assignmentId)),
+                  child: const Text('Decline'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _guard(context,
+                      () => controller.claimOffer(delivery.assignmentId)),
+                  child: const Text('Accept'),
+                ),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+}
+
+/// The shared part of a job card: where to go and what is in the bag.
+class _DeliveryBody extends StatelessWidget {
+  const _DeliveryBody({required this.delivery});
+
+  final RiderDelivery delivery;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!delivery.hasContactDetails) {
+      return Text(
+        'Contact details unavailable — this order was placed before the app '
+        'recorded them. Call the branch.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.warning,
+            ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (delivery.deliveryAddress.isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.location_on_rounded,
+                  size: 16, color: AppColors.textLight),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(delivery.deliveryAddress,
+                    style: Theme.of(context).textTheme.bodyMedium),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+        ],
+        if (delivery.itemSummary.isNotEmpty)
+          Text(delivery.itemSummary,
+              style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 4),
+        Text('Collect from ${delivery.branchName}',
+            style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+/// Call and maps buttons, shown only when there is something to call or point
+/// at. This is what keeps a pre-snapshot order from rendering empty buttons.
+class _ContactActions extends StatelessWidget {
+  const _ContactActions({required this.delivery});
+
+  final RiderDelivery delivery;
+
+  @override
+  Widget build(BuildContext context) {
+    final canCall = delivery.customerPhone.trim().isNotEmpty;
+    final mapsUrl = delivery.mapsUrl;
+
+    if (!canCall && mapsUrl == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: [
+        if (canCall)
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.phone_rounded, size: 18),
+              label: const Text('Call'),
+              onPressed: () => _open(
+                context,
+                Uri(scheme: 'tel', path: delivery.customerPhone.trim()),
+                'This phone cannot make calls.',
+              ),
+            ),
+          ),
+        if (canCall && mapsUrl != null) const SizedBox(width: 10),
+        if (mapsUrl != null)
+          Expanded(
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.map_rounded, size: 18),
+              label: const Text('Open in Maps'),
+              onPressed: () => _open(
+                context,
+                Uri.parse(mapsUrl),
+                'No maps app is installed on this phone.',
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _open(BuildContext context, Uri uri, String failureMessage) async {
+    final opened = await launchUrl(uri);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failureMessage)));
+    }
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({required this.delivery});
+
+  final RiderDelivery delivery;
+
+  @override
+  Widget build(BuildContext context) {
+    return MrCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(delivery.billNumber,
+                    style: Theme.of(context).textTheme.titleSmall),
+                if (delivery.customerName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(delivery.customerName,
+                      style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ],
+            ),
+          ),
+          Text(
+            delivery.assignmentStatus,
+            style: TextStyle(
+              color: delivery.assignmentStatus == 'delivered'
+                  ? AppColors.success
+                  : AppColors.textSecondary,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The full-width message used for "not set up", "no work" and load failures.
+class _RiderMessage extends StatelessWidget {
+  const _RiderMessage({
+    required this.message,
+    required this.detail,
+    this.onRetry,
+  });
+
+  final String message;
+  final String detail;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const MrIconWell(
+              icon: Icons.two_wheeler_rounded,
+              size: 28,
+              background: AppColors.sand,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: onRetry,
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared by the offer and active cards: surfaces a database refusal.
+Future<void> _guard(BuildContext context, Future<void> Function() action) async {
+  try {
+    await action();
+  } on RiderRepositoryException catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 }
