@@ -46,25 +46,40 @@ class RiderRepository {
   /// overrides every method must not trigger it just by being constructed.
   final SupabaseClient? _injectedClient;
 
-  RiderRepository({SupabaseClient? client}) : _injectedClient = client;
+  /// The rider this repository acts as. Defaults to the signed-in session and is
+  /// injectable so tests do not need a live session.
+  final String? _explicitUserId;
+
+  RiderRepository({SupabaseClient? client, String? signedInUserId})
+      : _injectedClient = client,
+        _explicitUserId = signedInUserId;
 
   /// The client to talk to: injected in tests, the global one in the app.
   SupabaseClient get client => _injectedClient ?? supabase;
 
-  /// The rider's own record, or null when the panel has not created it yet.
+  /// The id of the rider whose work this repository reads and changes.
+  String? get signedInUserId => _explicitUserId ?? client.auth.currentUser?.id;
+
+  /// The rider's own record, or null only when the dashboard has genuinely not
+  /// created one yet.
+  ///
+  /// The read is filtered by this rider's id rather than relying on RLS to do
+  /// it. Without the filter the query returns one row per rider in the system,
+  /// `maybeSingle()` throws on the extra rows, and that error was being reported
+  /// as "your account is not set up" — the wrong message for a rider who does
+  /// have an account.
   Future<RiderDetails?> fetchRiderDetails() async {
-    try {
-      final row = await client
-          .from('rider_details')
-          .select('branch_id, status, branch:branches(name, address)')
-          .maybeSingle();
-      if (row == null) return null;
-      return RiderDetails.fromMap(row);
-    } on PostgrestException {
-      // A missing table or a refused read is the same thing to the rider: their
-      // account is not usable. The dashboard shows one message for both.
-      return null;
-    }
+    final riderId = signedInUserId;
+    if (riderId == null) return null;
+
+    final row = await client
+        .from('rider_details')
+        .select('branch_id, status, branch:branches(name, address)')
+        .eq('profile_id', riderId)
+        .maybeSingle();
+
+    if (row == null) return null;
+    return RiderDetails.fromMap(row);
   }
 
   /// The rider's assignments joined to the order contact snapshot and branch.
@@ -118,18 +133,15 @@ class RiderRepository {
   /// be read. Zero is passed through to the earnings rule, which then reports
   /// 0 rather than inventing a figure.
   Future<double> fetchPayoutRate() async {
-    try {
-      final row = await client
-          .from('store_settings')
-          .select('rider_payout_per_delivery')
-          .maybeSingle();
-      if (row == null) return 0;
-      final value = row['rider_payout_per_delivery'];
-      if (value is num) return value.toDouble();
-      return 0;
-    } on PostgrestException {
-      return 0;
-    }
+    final row = await client
+        .from('store_settings')
+        .select('rider_payout_per_delivery')
+        .limit(1)
+        .maybeSingle();
+    if (row == null) return 0;
+    final value = row['rider_payout_per_delivery'];
+    if (value is num) return value.toDouble();
+    return 0;
   }
 
   Future<void> claimOffer(String assignmentId) =>

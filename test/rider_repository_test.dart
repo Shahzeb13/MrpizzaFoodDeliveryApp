@@ -160,6 +160,41 @@ void main() {
     expect(await repository.fetchRiderDetails(), isNull);
   });
 
+  test('the rider record is read for this rider only, never every rider',
+      () async {
+    // Without an explicit filter this returns one row per rider in the whole
+    // system, and maybeSingle() throws "multiple rows" — which looked exactly
+    // like "this rider has no record" and showed the wrong message.
+    final repository = RiderRepository(
+      client: _clientReturning({'branch_id': 'b1', 'status': 'available'}),
+      signedInUserId: 'rider-uuid',
+    );
+
+    await repository.fetchRiderDetails();
+
+    expect(_requests, hasLength(1));
+    final query = _requests.single.url.query;
+    expect(query, contains('profile_id=eq.rider-uuid'));
+  });
+
+  test('with no signed-in rider there is nothing to fetch', () async {
+    final repository = RiderRepository(client: _clientReturning({}));
+
+    expect(await repository.fetchRiderDetails(), isNull);
+    expect(_requests, isEmpty);
+  });
+
+  test('a failed read is not reported as an account that is not set up', () async {
+    // Reporting a network or permission failure as "not set up yet" tells the
+    // rider to go and ask the branch for an account they already have.
+    final repository = RiderRepository(
+      client: _clientFailing(),
+      signedInUserId: 'rider-uuid',
+    );
+
+    await expectLater(repository.fetchRiderDetails(), throwsA(anything));
+  });
+
   test('the repository never writes the rider tables directly', () {
     final source = File(
       'lib/features/rider/data/rider_repository.dart',
