@@ -164,11 +164,10 @@ class MrPizzaLogoWidget extends StatelessWidget {
 
 /// Small contextual tag used on dish cards (category / spice / prep meta).
 class _ItemTag extends StatelessWidget {
-  final IconData? icon;
   final String text;
   final Color? color;
 
-  const _ItemTag({this.icon, required this.text, this.color});
+  const _ItemTag({required this.text, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -176,10 +175,6 @@ class _ItemTag extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[
-          Icon(icon, size: 12, color: clr),
-          const SizedBox(width: 3),
-        ],
         Text(
           text,
           style: TextStyle(
@@ -394,33 +389,13 @@ class PizzaCard extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.star_rounded,
-                              size: 14, color: AppColors.accent),
-                          const SizedBox(width: 3),
-                          Text(
-                            item.rating.toStringAsFixed(1),
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          _ItemTag(
-                            icon: Icons.schedule_rounded,
-                            text: item.prepTime,
-                          ),
-                          if (item.isBestseller) ...[
-                            const SizedBox(width: 10),
-                            const _ItemTag(
-                              text: 'Bestseller',
-                              color: AppColors.primary,
-                            ),
-                          ],
-                        ],
-                      ),
+                      if (item.isBestseller) ...[
+                        const SizedBox(height: 8),
+                        const _ItemTag(
+                          text: 'Bestseller',
+                          color: AppColors.primary,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -697,11 +672,6 @@ class GridItemCard extends ConsumerWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 1),
-                  _ItemTag(
-                    text: '${item.rating.toStringAsFixed(1)} ★',
-                    color: AppColors.accent,
                   ),
                 ],
               ),
@@ -1288,6 +1258,37 @@ class _QtyButton extends StatelessWidget {
 }
 
 /// Location Selection Dialog (GPS, saved addresses, manual entry)
+/// The saved addresses offered in the location dialog, duplicates collapsed.
+///
+/// The address currently applied to the location is deliberately left out:
+/// offering it as a choice the customer has not made yet invites them to
+/// "confirm" a location they are already standing at and then wonder why
+/// nothing visibly happened.
+List<UserAddress> savedAddressesForDialog({
+  required List<UserAddress> addresses,
+  required String? currentAddressText,
+}) {
+  final seenIds = <String>{};
+  final result = <UserAddress>[];
+  for (final address in addresses) {
+    if (address.addressLine == currentAddressText) continue;
+    if (seenIds.add(address.id)) result.add(address);
+  }
+  return result;
+}
+
+/// Which saved address the dialog should open with: the customer's own default,
+/// falling back to the first one on file when none is marked.
+///
+/// Takes only the addresses that are actually visible in the dialog, so the
+/// value chosen here can never be one the dropdown cannot display — which is
+/// what would leave the field showing its hint while state believed something
+/// was selected.
+UserAddress? defaultSavedAddress(List<UserAddress> visible) {
+  if (visible.isEmpty) return null;
+  return visible.firstWhere((address) => address.isDefault, orElse: () => visible.first);
+}
+
 class LocationSelectionDialog extends ConsumerStatefulWidget {
   const LocationSelectionDialog({super.key});
 
@@ -1304,9 +1305,47 @@ class _LocationSelectionDialogState
   bool _isSaving = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _preselectDefaultSavedAddress();
+    });
+  }
+
+  @override
   void dispose() {
     _addressController.dispose();
     super.dispose();
+  }
+
+  /// Preselects the default address as soon as one is known.
+  ///
+  /// This is the whole difference between "open the dialog, choose something,
+  /// confirm" and "open the dialog, confirm". Without it the customer has to
+  /// touch the dropdown on every single visit, to choose something the app
+  /// already knows they chose when they marked it as their default.
+  ///
+  /// Runs from a listener and again after the first frame, because addresses
+  /// may already be cached by the time this dialog opens — in which case the
+  /// listener never fires and the post-frame pass is the only chance.
+  void _preselectDefaultSavedAddress() {
+    if (_selectedSaved != null) return;
+
+    final address = _defaultFromLoadedAddresses();
+    if (address == null) return;
+
+    setState(() => _selectedSaved = address);
+  }
+
+  UserAddress? _defaultFromLoadedAddresses() {
+    final addresses = ref.read(addressesFutureProvider).value ?? const <UserAddress>[];
+    if (addresses.isEmpty) return null;
+    return defaultSavedAddress(
+      savedAddressesForDialog(
+        addresses: addresses,
+        currentAddressText: ref.read(locationProvider).address,
+      ),
+    );
   }
 
   /// Applies the choice to the app and stores it, so My Addresses and checkout
@@ -1318,14 +1357,24 @@ class _LocationSelectionDialogState
   Future<void> _select() async {
     final entered = _addressController.text.trim();
 
-    if (entered.isEmpty && _selectedSaved == null) return;
+    // A saved address is already stored, so it only needs applying. A typed or
+    // GPS-captured one is written to the `addresses` table here — previously it
+    // lived in memory only, which is why the address list stayed empty.
+    //
+    // Falling back to the default address means Confirm is never a dead button.
+    // It used to return early when the field was empty and nothing had been
+    // picked, so the customer had to open the dropdown and choose before
+    // confirming did anything at all — on every single visit.
+    final chosen = _selectedSaved ?? _defaultFromLoadedAddresses();
+
+    if (entered.isEmpty && chosen == null) return;
     setState(() => _isSaving = true);
 
     final locationNotifier = ref.read(locationProvider.notifier);
 
-    if (_selectedSaved != null) {
+    if (chosen != null) {
       // Keep the stored pin so checkout can name the closest branch.
-      locationNotifier.applySavedAddress(_selectedSaved!);
+      locationNotifier.applySavedAddress(chosen);
     } else if (entered.isNotEmpty) {
       // setLocation geocodes first so the branch can be worked out; it stores
       // the text immediately, so the save below can rely on the text being set.
@@ -1378,18 +1427,18 @@ class _LocationSelectionDialogState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = ref.watch(locationProvider);
-    final addresses = ref.watch(addressesFutureProvider).value ?? const [];
-    final savedAddresses = addresses
-        .where((address) => address.addressLine != location.address)
-        .toList();
+    final addresses = ref.watch(addressesFutureProvider).value ?? const <UserAddress>[];
+    final uniqueSavedAddresses = savedAddressesForDialog(
+      addresses: addresses,
+      currentAddressText: location.address,
+    );
 
-    final seenIds = <String>{};
-    final uniqueSavedAddresses = <UserAddress>[];
-    for (final address in savedAddresses) {
-      if (seenIds.add(address.id)) {
-        uniqueSavedAddresses.add(address);
-      }
-    }
+    // Addresses can finish loading after this dialog opens. When they do, the
+    // default gets preselected without the customer touching anything.
+    ref.listen(addressesFutureProvider, (previous, next) {
+      if (next.valueOrNull == null) return;
+      _preselectDefaultSavedAddress();
+    });
 
     final activeSelection = uniqueSavedAddresses.any((a) => a == _selectedSaved)
         ? uniqueSavedAddresses.firstWhere((a) => a == _selectedSaved)

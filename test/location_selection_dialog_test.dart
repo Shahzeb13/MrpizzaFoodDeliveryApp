@@ -62,7 +62,11 @@ void main() {
     await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
     await tester.pumpAndSettle();
 
-    expect(find.text('House 12, Street 4, Abbottabad'), findsOneWidget);
+    // Two, not one: the dialog now opens with the default already preselected,
+    // so the collapsed button shows the address AND the opened menu lists it.
+    // The point of this test is that only genuinely saved addresses appear —
+    // which "never offers made-up addresses" covers.
+    expect(find.text('House 12, Street 4, Abbottabad'), findsNWidgets(2));
   });
 
   testWidgets('never offers made-up addresses', (tester) async {
@@ -176,7 +180,10 @@ void main() {
     await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
     await tester.pumpAndSettle();
 
-    expect(find.text('House 12, Street 4, Abbottabad'), findsOneWidget);
+    // One preselected in the button, one in the opened menu — and NOT three.
+    // The point is that the two rows sharing an id collapse into a single
+    // choice, so a duplicate can never be selected as something new.
+    expect(find.text('House 12, Street 4, Abbottabad'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -201,5 +208,82 @@ void main() {
     // Trigger an extra rebuild
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  group('confirming does not require picking anything first', () {
+    // The regression this whole group is about. The dialog opened with nothing
+    // selected and `_select` returned early when both the text field and the
+    // dropdown were empty — so "Confirm Location" was a dead button and the only
+    // way through was opening the dropdown and choosing something on every
+    // visit, including the ones where the customer had already marked a default.
+    UserAddress home({required String id, required String line, bool isDefault = false}) {
+      return UserAddress(
+        id: id,
+        userId: 'user-1',
+        label: 'Home',
+        addressLine: line,
+        isDefault: isDefault,
+      );
+    }
+
+    testWidgets('the marked default is already filled in', (tester) async {
+      await pumpDialog(
+        tester,
+        savedAddresses: [
+          home(id: 'addr-1', line: 'Office, Blue Area'),
+          home(id: 'addr-2', line: 'House 12, Street 4', isDefault: true),
+        ],
+      );
+
+      // Visible in the collapsed button without ever being tapped.
+      expect(find.text('House 12, Street 4'), findsOneWidget);
+      expect(find.text('Saved address'), findsNothing);
+    });
+
+    testWidgets('confirming on its own applies the default', (tester) async {
+      final container = await pumpDialog(
+        tester,
+        savedAddresses: [
+          home(id: 'addr-1', line: 'Office, Blue Area'),
+          home(id: 'addr-2', line: 'House 12, Street 4', isDefault: true),
+        ],
+      );
+
+      await tester.tap(find.text('Confirm Location'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(locationProvider).address,
+        'House 12, Street 4',
+      );
+    });
+
+    testWidgets('the only saved address works too', (tester) async {
+      final container = await pumpDialog(
+        tester,
+        savedAddresses: [home(id: 'addr-1', line: 'House 12, Street 4')],
+      );
+
+      await tester.tap(find.text('Confirm Location'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(locationProvider).address,
+        'House 12, Street 4',
+      );
+    });
+
+    testWidgets('with no saved address the button still does nothing safely',
+        (tester) async {
+      // Nobody is fooled into an empty delivery address.
+      final container = await pumpDialog(tester, savedAddresses: const []);
+
+      await tester.tap(find.text('Confirm Location'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Blank, not invented. Nobody is fooled into an empty delivery address.
+      expect(container.read(locationProvider).address, isEmpty);
+    });
   });
 }

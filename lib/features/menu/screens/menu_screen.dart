@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../../widgets/shared_components.dart';
+import '../../orders/presentation/live_order_bar.dart';
+import '../../payment/start_checkout_guarded.dart';
 import '../providers/menu_provider.dart';
 
 class MenuScreen extends ConsumerStatefulWidget {
@@ -223,7 +224,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 16,
                       ),
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 90),
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 170),
                       itemCount: filteredItems.length,
                       itemBuilder: (context, index) {
                         final item = filteredItems[index];
@@ -243,7 +244,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
                     )
                   : ListView.builder(
                       itemCount: filteredItems.length,
-                      padding: const EdgeInsets.only(top: 4, bottom: 90),
+                      padding: const EdgeInsets.only(top: 4, bottom: 170),
                       itemBuilder: (context, index) {
                         final item = filteredItems[index];
                         return PizzaCard(
@@ -265,10 +266,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen>
             left: 0,
             right: 0,
             bottom: 0,
-            child: CartFloatingBar(
-              onTap: () {
-                context.push('/checkout');
-              },
+            child: LiveOrderBottomBars(
+              onCheckout: () => startCheckoutGuarded(context, ref),
             ),
           ),
         ],

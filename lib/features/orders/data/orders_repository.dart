@@ -63,8 +63,13 @@ class OrdersRepository {
     return BranchCatalog(branches: branches, usedFallbackData: false);
   }
 
-  /// Inserts the order header plus one `order_items` row per cart line.
-  Future<void> placeOrder(Order order) async {
+  /// Inserts the order header plus one `order_items` row per cart line, and
+  /// returns the new order's id.
+  ///
+  /// The id comes back because a voucher can only be redeemed once the order
+  /// exists — `redeem_voucher` reads the subtotal and menu items back off the
+  /// order rows instead of trusting the cart the customer was shown.
+  Future<String> placeOrder(Order order) async {
     final orderRes = await supabase
         .from('orders')
         .insert(order.toInsertMap())
@@ -77,5 +82,7 @@ class OrdersRepository {
           .from('order_items')
           .insert(order.items.map((item) => item.toInsertMap(orderId)).toList());
     }
+
+    return orderId;
   }
 }

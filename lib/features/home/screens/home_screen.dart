@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -9,6 +8,8 @@ import '../../../widgets/shared_components.dart';
 import '../../menu/data/menu_catalog.dart';
 import '../../menu/models/menu_category.dart';
 import '../../menu/providers/menu_provider.dart';
+import '../../orders/presentation/live_order_bar.dart';
+import '../../payment/start_checkout_guarded.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -444,21 +445,22 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
                 child: CustomerReviewsSection(),
               ),
 
+              // Room for the live order bar stacked above the cart bar. Sized
+              // for the worst case (both visible) so the scroll never jumps when
+              // one of them appears or disappears.
               const SliverToBoxAdapter(
-                child: SizedBox(height: 90),
+                child: SizedBox(height: 170),
               ),
             ],
           ),
 
-          // Floating Cart Bar
+          // Live order bar above the cart bar
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: CartFloatingBar(
-              onTap: () {
-                context.push('/checkout');
-              },
+            child: LiveOrderBottomBars(
+              onCheckout: () => startCheckoutGuarded(context, ref),
             ),
           ),
         ],

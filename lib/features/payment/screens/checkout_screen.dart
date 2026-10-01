@@ -7,15 +7,19 @@ import '../../../core/providers/location_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
+import '../../../widgets/shared_components.dart';
 import '../../menu/providers/menu_provider.dart';
 import '../../orders/data/orders_repository.dart';
 import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
-import '../../orders/providers/order_flow_provider.dart';
 import '../../orders/providers/orders_provider.dart';
+import '../../orders/providers/live_order_provider.dart';
+import '../../orders/providers/order_tracking_provider.dart';
 import '../../profile/models/profile.dart';
 import '../../profile/providers/address_selection_provider.dart';
 import '../../profile/providers/profile_provider.dart';
+import '../data/voucher_repository.dart';
+import '../models/voucher.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -27,8 +31,17 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
   final _voucherController = TextEditingController();
-  String? _appliedVoucher;
-  double _voucherDiscount = 0.0;
+
+  /// The voucher the database approved for the current cart, or null. Held as
+  /// the database's whole verdict rather than as a code and a number, so the
+  /// summary can describe what was actually granted.
+  VoucherCheck? _appliedVoucher;
+
+  /// True while the database is deciding whether a typed code can be used.
+  bool _isCheckingVoucher = false;
+
+  /// What the applied voucher takes off, straight from the database.
+  double get _voucherDiscount => _appliedVoucher?.discountAmount ?? 0;
 
   /// The branches currently loaded, or an empty list before the first load.
   /// Empty (not bundled) on purpose: inventing branches here would let an
@@ -50,26 +63,64 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
-  void _handleApplyVoucher(OrderTotals totals) {
+  /// Asks the database whether the typed code can be used on this cart, and
+  /// keeps the voucher only if the database says yes.
+  ///
+  /// The code is not judged here. Active, in-date, minimum subtotal, per-customer
+  /// limit, total limit and any menu-item restriction are all decided by
+  /// `validate_voucher` against the `vouchers` table, and its refusal wording is
+  /// what the customer is shown — so an expired or already-used code says so
+  /// instead of failing as "invalid".
+  Future<void> _handleApplyVoucher(OrderTotals totals) async {
     FocusScope.of(context).unfocus();
-    final code = _voucherController.text.trim().toUpperCase();
+    final code = _voucherController.text.trim();
     if (code.isEmpty) {
       _showMessage('Please enter a voucher code', isError: true);
       return;
     }
-    if (code == 'SAVE10') {
-      setState(() {
-        _appliedVoucher = 'SAVE10';
-        _voucherDiscount = totals.subtotal * 0.10;
-      });
-      _showMessage('Voucher SAVE10 applied! 10% discount');
-    } else {
-      setState(() {
-        _appliedVoucher = null;
-        _voucherDiscount = 0.0;
-      });
-      _showMessage('Invalid voucher code. Try "SAVE10"', isError: true);
+    if (_isCheckingVoucher) return;
+
+    final cart = ref.read(cartProvider);
+    setState(() => _isCheckingVoucher = true);
+
+    VoucherCheck verdict;
+    try {
+      verdict = await ref.read(voucherRepositoryProvider).validateVoucher(
+            code: code,
+            subtotal: totals.subtotal,
+            menuItemIds: cart.items.map((line) => line.item.id).toList(),
+          );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isCheckingVoucher = false);
+      _showMessage(
+        'We could not check that code right now. Please try again.',
+        isError: true,
+      );
+      return;
     }
+
+    if (!mounted) return;
+    setState(() {
+      _isCheckingVoucher = false;
+      _appliedVoucher = verdict.isUsable ? verdict : null;
+    });
+
+    if (verdict.isUsable) {
+      _voucherController.clear();
+      _showMessage(verdict.message);
+    } else {
+      _showMessage(verdict.message, isError: true);
+    }
+  }
+
+  /// Drops the voucher and forgets everything the database told us about it.
+  void _removeVoucher() {
+    setState(() {
+      _appliedVoucher = null;
+      _voucherController.clear();
+    });
+    _showMessage('Voucher removed');
   }
 
   /// Applies the sensible defaults once the address/branch data is available:
@@ -530,11 +581,31 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final branch = _resolveBranchOrAskCustomer(checkout);
     if (branch == null) return;
-    final resolvedCheckout = ref.read(checkoutProvider);
+    var resolvedCheckout = ref.read(checkoutProvider);
 
     if (resolvedCheckout.isDelivery && resolvedCheckout.address == null) {
-      _showMessage('Please select a delivery address.');
-      return;
+      // Resolved late rather than refused. `_syncCheckout` sets the default as
+      // soon as addresses load, but there is a window where checkout can be
+      // reached before that lands — and in that window the address card was
+      // already RENDERING the default address, so refusing here told a customer
+      // to "select a delivery address" while showing them one already selected.
+      //
+      // The unfiltered list is used deliberately: the address currently applied
+      // to the location is a perfectly good delivery address, and hiding it
+      // here could leave a customer with exactly one saved place unable to order.
+      final addresses =
+          ref.read(addressesFutureProvider).value ?? const <UserAddress>[];
+      final fallback = defaultSavedAddress(addresses);
+
+      if (fallback == null) {
+        _showMessage('Please select a delivery address.');
+        return;
+      }
+
+      ref
+          .read(checkoutProvider.notifier)
+          .selectAddress(fallback, branches: _loadedBranches);
+      resolvedCheckout = ref.read(checkoutProvider);
     }
 
     // The rider cannot read the customer's profile or address row, so the
@@ -564,6 +635,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final totals = OrderTotals(subtotal: cart.subtotal, orderType: resolvedCheckout.orderType);
     final deliveryAddress =
         resolvedCheckout.isDelivery ? resolvedCheckout.address : null;
+    late final String placedOrderId;
     try {
       final order = Order(
         customerId: userId,
@@ -586,7 +658,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         deliveryLatitude: deliveryAddress?.latitude,
         deliveryLongitude: deliveryAddress?.longitude,
       );
-      await ref.read(ordersRepositoryProvider).placeOrder(order);
+      placedOrderId =
+          await ref.read(ordersRepositoryProvider).placeOrder(order);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isPlacingOrder = false);
@@ -594,41 +667,44 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
-    final discountedTotal =
-        (totals.total - _voucherDiscount).clamp(0.0, double.infinity);
-    final profile = ref.read(profileFutureProvider).value;
+    // The voucher is claimed against the order that now exists, so the discount
+    // is computed by the database from the rows that were actually inserted.
+    // A code that passed the check at apply time can still be refused here —
+    // it may have expired, or the customer may have reached their limit on
+    // another device — so the database's redemption verdict is the one that
+    // counts, and a refusal is reported rather than quietly ignored.
+    final pendingVoucher = _appliedVoucher;
+    var voucherWarning = '';
+    if (pendingVoucher != null) {
+      try {
+        final redemption = await ref.read(voucherRepositoryProvider)
+            .redeemVoucher(code: pendingVoucher.code, orderId: placedOrderId);
+        if (!redemption.isUsable) {
+          voucherWarning = redemption.message;
+        }
+      } catch (_) {
+        voucherWarning = 'Your voucher could not be applied to this order.';
+      }
+    }
 
-    ref.read(orderFlowProvider.notifier).createOrder(
-          items: cart.items,
-          subtotal: totals.subtotal,
-          tax: totals.tax,
-          deliveryFee: totals.deliveryFee,
-          discount: _voucherDiscount,
-          voucherCode: _appliedVoucher,
-          total: discountedTotal,
-          orderType: resolvedCheckout.orderType,
-          customerName: (profile?.fullName.isNotEmpty ?? false)
-              ? profile!.fullName
-              : 'Aalyan Mughal',
-          customerPhone: (profile?.phone.isNotEmpty ?? false)
-              ? profile!.phone
-              : '+92 331 6290108',
-          deliveryAddress: resolvedCheckout.isDelivery
-              ? (resolvedCheckout.address?.addressLine ??
-                  'Mandian, Abbottabad')
-              : 'Store Pickup (${branch.name})',
-          branchName: branch.name,
-        );
+    // Hand the real order id to the tracking screen. It used to build a
+    // `DemoOrder` in memory here, which is why the tracking screen showed a
+    // rider called "Test Rider" and a hardcoded kitchen headline for an order
+    // that had a real row in `orders` all along.
+    ref.read(trackedOrderIdProvider.notifier).state = placedOrderId;
 
-    // Snapshot cart BEFORE clearing so the tracking screen can display items.
-    ref.read(lastOrderSnapshotProvider.notifier).state = LastOrderSnapshot(
-      items: List.unmodifiable(cart.items),
-      totals: totals,
-      orderType: resolvedCheckout.orderType,
-    );
+    // A brand new order is exactly the event the home/menu live bar caches
+    // against, so it has to be told, or it keeps reporting the "nothing active"
+    // it worked out before this order existed. Clearing the pin first matters
+    // as much as the refresh: a bare refresh would find the pin intact and keep
+    // showing whatever the bar was following before this order existed.
+    startFollowingNewlyPlacedOrder(ref);
 
     ref.read(cartProvider.notifier).clearCart();
     if (!mounted) return;
+    if (voucherWarning.isNotEmpty) {
+      _showMessage(voucherWarning, isError: true);
+    }
     context.go('/orders/track');
   }
 
@@ -1461,6 +1537,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildVoucherSection(OrderTotals totals) {
+    final voucher = _appliedVoucher;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1474,10 +1552,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: _appliedVoucher != null
-                  ? AppColors.success
-                  : AppColors.border,
-              width: _appliedVoucher != null ? 1.5 : 1,
+              color: voucher != null ? AppColors.success : AppColors.border,
+              width: voucher != null ? 1.5 : 1,
             ),
             boxShadow: const [
               BoxShadow(
@@ -1491,19 +1567,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             children: [
               Icon(
                 Icons.confirmation_number_outlined,
-                color: _appliedVoucher != null
-                    ? AppColors.success
-                    : AppColors.primary,
+                color: voucher != null ? AppColors.success : AppColors.primary,
                 size: 22,
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _appliedVoucher != null
+                child: voucher != null
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Code "$_appliedVoucher" applied!',
+                            'Code "${voucher.code}" applied!',
                             style: const TextStyle(
                               fontFamily: AppTheme.fontFamily,
                               fontWeight: FontWeight.w800,
@@ -1512,7 +1586,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             ),
                           ),
                           Text(
-                            '10% discount (-Rs. ${_voucherDiscount.toInt()})',
+                            _describeVoucherSaving(voucher),
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppColors.textSecondary,
@@ -1523,8 +1597,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     : TextField(
                         controller: _voucherController,
                         textCapitalization: TextCapitalization.characters,
+                        onSubmitted: (_) => _handleApplyVoucher(totals),
                         decoration: const InputDecoration(
-                          hintText: 'Enter voucher code (e.g. SAVE10)',
+                          hintText: 'Enter voucher code',
                           hintStyle: TextStyle(
                             fontSize: 13,
                             color: AppColors.textLight,
@@ -1535,22 +1610,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                       ),
               ),
-              if (_appliedVoucher != null)
+              if (voucher != null)
                 IconButton(
                   icon: const Icon(Icons.close_rounded,
                       color: AppColors.textLight, size: 20),
-                  onPressed: () {
-                    setState(() {
-                      _appliedVoucher = null;
-                      _voucherDiscount = 0.0;
-                      _voucherController.clear();
-                    });
-                    _showMessage('Voucher removed');
-                  },
+                  onPressed: _removeVoucher,
                 )
               else
                 FilledButton(
-                  onPressed: () => _handleApplyVoucher(totals),
+                  onPressed:
+                      _isCheckingVoucher ? null : () => _handleApplyVoucher(totals),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     padding: const EdgeInsets.symmetric(
@@ -1560,16 +1629,45 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text(
-                    'Apply',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
+                  child: _isCheckingVoucher
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Apply',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w800),
+                        ),
                 ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  /// Describes the saving in the voucher's own terms, taken from the row the
+  /// database returned — never a percentage or amount the app worked out itself.
+  String _describeVoucherSaving(VoucherCheck voucher) {
+    if (voucher.isFreeDelivery) {
+      return 'Free delivery (-Rs. ${voucher.discountAmount.toInt()})';
+    }
+    final kind = voucher.isPercentage
+        ? '${_trimNumber(voucher.discountValue)}% off'
+        : 'Rs. ${voucher.discountValue.toInt()} off';
+    return '$kind (-Rs. ${voucher.discountAmount.toInt()})';
+  }
+
+  /// Drops the zeros Postgres `numeric` carries, so 20.00 reads as "20%" and
+  /// 300.00 as "300", instead of leaking the column's scale into the UI.
+  String _trimNumber(double value) {
+    final text = value.toStringAsFixed(2);
+    return text.replaceFirst(RegExp(r'\.?0+$'), '');
   }
 
   Widget _buildSummarySection(
@@ -1610,12 +1708,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               const SizedBox(height: 8),
               _summaryRow(
                 'Delivery Charge',
-                'Rs. ${totals.deliveryFee.toInt()}',
+                _deliveryChargeLabel(totals),
+                color: _appliedVoucher?.isFreeDelivery == true
+                    ? AppColors.success
+                    : null,
               ),
               if (_appliedVoucher != null) ...[
                 const SizedBox(height: 8),
                 _summaryRow(
-                  'Voucher Discount ($_appliedVoucher)',
+                  'Voucher Discount (${_appliedVoucher!.code})',
                   '-Rs. ${_voucherDiscount.toInt()}',
                   color: AppColors.success,
                 ),
@@ -1653,6 +1754,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
       ],
     );
+  }
+
+  /// The delivery charge line, shown as waived when a `free_delivery` voucher
+  /// is in force so the customer can see the fee they are not paying.
+  String _deliveryChargeLabel(OrderTotals totals) {
+    if (_appliedVoucher?.isFreeDelivery == true) {
+      return 'Free (Rs. ${totals.deliveryFee.toInt()} waived)';
+    }
+    return 'Rs. ${totals.deliveryFee.toInt()}';
   }
 
   Widget _summaryRow(String label, String value, {Color? color}) {

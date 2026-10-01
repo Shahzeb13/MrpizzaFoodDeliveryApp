@@ -1,546 +1,332 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
-import '../../menu/models/menu_item.dart';
-import '../providers/order_flow_provider.dart';
-import '../providers/orders_provider.dart';
+import '../models/order_tracking.dart';
+import '../presentation/order_status_copy.dart';
+import '../providers/order_tracking_provider.dart';
+import 'order_tracking_animations.dart';
 
-class OrderTrackingScreen extends ConsumerStatefulWidget {
+export '../presentation/order_status_copy.dart'
+    show
+        formatClockTime,
+        formatDayLabel,
+        pipelineProgressFor,
+        riderAssignmentLabel,
+        stageColorFor,
+        stageHeadline,
+        stageSubtitle,
+        statusLabel;
+
+
+/// Live progress of a real order, read from the database.
+///
+/// The screen this replaces rendered a `DemoOrder`: a `Timer` assigned a rider
+/// called "Test Rider" 2.5 seconds after checkout, the headline was hardcoded to
+/// "Baking in Wood-Fired Oven" whatever the order was actually doing, a rider
+/// called "Marco" was drawn 1.2 km away on a map of invented roads, and the
+/// order number was the literal string `ORDER #MP-9842`. Every value below now
+/// comes from `order_tracking()` — the order row, its items, the assignment the
+/// branch actually made and the status changes the branch and rider recorded.
+class OrderTrackingScreen extends ConsumerWidget {
   const OrderTrackingScreen({super.key});
 
   @override
-  ConsumerState<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trackingAsync = ref.watch(activeOrderTrackingProvider);
 
-class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final activeOrder = ref.watch(activeDemoOrderProvider);
-    final orderId = activeOrder?.id ?? 'ORDER #MP-9842';
-    final status = activeOrder?.status ?? DemoOrderStatus.accepted;
+    // Checkout reaches this screen with `go`, which REPLACES the route stack
+    // rather than stacking on it — so there is nothing to pop, and a plain
+    // `Navigator.pop` closed the whole app instead of going back. Both the
+    // button and the Android system back button route home when there is
+    // nothing underneath to return to.
+    final canGoBack = Navigator.of(context).canPop();
 
-    String headline = 'Baking & On The Way!';
-    String subtitle = 'Estimated arrival in 14 minutes';
-    String estTime = '14 MIN';
-
-    switch (status) {
-      case DemoOrderStatus.pending:
-        headline = 'Order Placed & Confirmed!';
-        subtitle = 'Searching for nearest available rider...';
-        estTime = '25 MIN';
-        break;
-      case DemoOrderStatus.assigned:
-        headline = 'Rider Assigned!';
-        subtitle = '${activeOrder?.riderName ?? "Rider"} is heading to kitchen';
-        estTime = '20 MIN';
-        break;
-      case DemoOrderStatus.accepted:
-        headline = 'Baking in Wood-Fired Oven';
-        subtitle = 'Chef is baking your pizza with fresh ingredients';
-        estTime = '15 MIN';
-        break;
-      case DemoOrderStatus.pickedUp:
-        headline = 'Out for Delivery!';
-        subtitle = '${activeOrder?.riderName ?? "Rider"} is en route with your food';
-        estTime = '8 MIN';
-        break;
-      case DemoOrderStatus.completed:
-        headline = 'Delivered Hot & Fresh!';
-        subtitle = 'Delivered! +${activeOrder?.pointsEarned ?? 0} Loyalty Points Earned';
-        estTime = 'DONE';
-        break;
-      case DemoOrderStatus.rejected:
-        headline = 'Finding Another Rider...';
-        subtitle = 'Previous rider was unavailable. Reassigning nearby...';
-        estTime = '22 MIN';
-        break;
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Live Order Tracking'),
-        backgroundColor: AppColors.surface,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              context.go('/home');
+    return PopScope(
+      canPop: canGoBack,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        context.go('/home');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Live Order Tracking'),
+          backgroundColor: AppColors.surface,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: () {
+              if (canGoBack) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/home');
+              }
+            },
+          ),
+        ),
+        body: trackingAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _TrackingProblem(
+            title: 'We could not load your order.',
+            detail: '$error',
+            onRetry: () => ref.invalidate(activeOrderTrackingProvider),
+          ),
+          data: (tracking) {
+            if (tracking == null) {
+              return const _TrackingProblem(
+                title: 'No orders to track yet',
+                detail:
+                    'Once you place an order it will be tracked here with its real '
+                    'status, bill number and rider. Nothing on this screen is made '
+                    'up, so there is nothing to show until there is a real order.',
+              );
             }
+            return _OrderTrackingBody(tracking: tracking);
           },
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Order ID & Status Header Card
-            MrDoubleBezel(
-              radius: 28,
-              innerColor: AppColors.surfaceDark,
-              outerPadding: const EdgeInsets.all(6),
-              innerPadding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              orderId,
-                              style: const TextStyle(
-                                color: AppColors.accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.2,
-                                fontFamily: AppTheme.fontFamily,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              headline,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(color: Colors.white),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              subtitle,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: AppColors.textLight),
-                            ),
-                          ],
-                        ),
-                      ),
-                      MrDoubleBezel(
-                        radius: 20,
-                        outerPadding: const EdgeInsets.all(4),
-                        innerPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        innerColor: AppColors.surfaceDark,
-                        trayColor: AppColors.primary,
-                        child: Column(
-                          children: [
-                            const Text(
-                              'EST. TIME',
-                              style: TextStyle(
-                                color: AppColors.accent,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1,
-                                fontFamily: AppTheme.fontFamily,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              estTime,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                fontFamily: AppTheme.fontFamily,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+    );
+  }
+}
+
+class _OrderTrackingBody extends ConsumerStatefulWidget {
+  const _OrderTrackingBody({required this.tracking});
+
+  final OrderTracking tracking;
+
+  @override
+  ConsumerState<_OrderTrackingBody> createState() => _OrderTrackingBodyState();
+}
+
+class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
+  /// The last change the branch made, shown briefly in a banner. Null until
+  /// something actually changes — a customer should not be told their order
+  /// "just" moved when they have only just opened the screen.
+  String? _updateBanner;
+
+  /// Which stage produced [_updateBanner], so it can be coloured to match. A
+  /// cancellation is announced in the danger colour, not the success green.
+  OrderStage? _announcedStage;
+
+  /// The order this screen is showing. Named so the builders below read as
+  /// plain functions of the order rather than reaching into `widget` at every
+  /// line.
+  OrderTracking get tracking => widget.tracking;
+
+  void _announceStageChange(OrderStage stage, String status) {
+    setState(() {
+      _announcedStage = stage;
+      _updateBanner = stageHeadline(stage, widget.tracking);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tracking = widget.tracking;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(activeOrderTrackingProvider);
+        await ref.read(activeOrderTrackingProvider.future);
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+        children: [
+          // Fires the animation and the banner when the dashboard moves the
+          // order. Sits above the list, out of the way.
+          OrderStageChangeNotifier(
+            tracking: tracking,
+            onStageChanged: _announceStageChange,
+          ),
+          if (_updateBanner != null) ...[
+            OrderUpdateBanner(
+              stage: _announcedStage!,
+              message: _updateBanner!,
             ),
-
-            // Live Simulation Map Box
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.border),
-                boxShadow: const [
-                  BoxShadow(
-                    color: AppColors.shadowSoft,
-                    blurRadius: 14,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  // Map Background Styling
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(23),
-                    child: Container(
-                      color: AppColors.sand,
-                      child: Stack(
-                        children: [
-                          // Road Grid Lines
-                          Positioned(
-                            top: 40,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                                height: 16, color: AppColors.surface),
-                          ),
-                          Positioned(
-                            top: 110,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                                height: 24, color: AppColors.surface),
-                          ),
-                          Positioned(
-                            left: 100,
-                            top: 0,
-                            bottom: 0,
-                            child: Container(
-                                width: 18, color: AppColors.surface),
-                          ),
-                          Positioned(
-                            right: 90,
-                            top: 0,
-                            bottom: 0,
-                            child: Container(
-                                width: 22, color: AppColors.surface),
-                          ),
-                          Positioned(
-                            left: 70,
-                            top: 70,
-                            child: Container(
-                              width: 10,
-                              height: 80,
-                              transform: Matrix4.rotationZ(-0.4),
-                              color: AppColors.surface,
-                            ),
-                          ),
-                          // Delivery Destination Pin
-                          Positioned(
-                            right: 60,
-                            top: 30,
-                            child: Column(
-                              children: [
-                                const Icon(Icons.location_on,
-                                    color: AppColors.primary, size: 36),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surface,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: AppColors.borderDeep),
-                                  ),
-                                  child: const Text(
-                                    'Home',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                      fontFamily: AppTheme.fontFamily,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Rider Pin
-                          Positioned(
-                            left: 90,
-                            top: 95,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                    color: AppColors.surface, width: 3),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.4),
-                                    blurRadius: 12,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.two_wheeler,
-                                  color: Colors.white, size: 20),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 12,
-                    left: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: const [
-                          BoxShadow(
-                              color: AppColors.shadowSoft, blurRadius: 8),
-                        ],
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.near_me,
-                              color: AppColors.primary, size: 16),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Rider Marco is 1.2 km away from your location',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                                fontFamily: AppTheme.fontFamily,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Rider Contact Info Card
-            MrCard(
-              padding: const EdgeInsets.all(16),
-              borderRadius: BorderRadius.circular(20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryTint,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.borderDeep),
-                    ),
-                    child: const Icon(Icons.delivery_dining,
-                        color: AppColors.primary, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          activeOrder?.riderName ?? 'Marco Rossi',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 3),
-                        Row(
-                          children: [
-                            const Icon(Icons.star_rounded,
-                                size: 13, color: AppColors.accent),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                activeOrder != null
-                                    ? '${activeOrder.riderRating}  |  Mr. Pizza Rider'
-                                    : '4.95  |  Mr. Pizza Senior Rider',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const MrIconWell(
-                      icon: Icons.call_rounded,
-                      color: AppColors.success,
-                      background: Color(0xFFE4F1E8),
-                    ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'Calling Rider ${activeOrder?.riderName ?? "Test Rider"} (${activeOrder?.riderPhone ?? "+92 300 1234567"})...')),
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const MrIconWell(
-                      icon: Icons.chat_bubble_rounded,
-                      color: AppColors.primary,
-                    ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'Opening Chat with ${activeOrder?.riderName ?? "Rider"}...')),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Order Items from the placed order
-            _buildOrderItemsSection(activeOrder),
-
-            const SizedBox(height: 24),
-
-            const MrSectionTitle(
-              eyebrow: 'Progress',
-              title: 'Order Pipeline',
-            ),
-            const SizedBox(height: 18),
-
-            _buildTrackingStep(
-              index: 0,
-              title: 'Order Confirmed',
-              subtitle: 'Restaurant received your order',
-              icon: Icons.check_circle,
-              isCompleted: true,
-              isCurrent: status == DemoOrderStatus.pending,
-            ),
-            _buildTrackingStep(
-              index: 1,
-              title: 'Baking in Wood-Fired Oven',
-              subtitle: 'Chef is baking your pizza with fresh ingredients',
-              icon: Icons.local_fire_department,
-              isCompleted: status == DemoOrderStatus.accepted ||
-                  status == DemoOrderStatus.pickedUp ||
-                  status == DemoOrderStatus.completed,
-              isCurrent: status == DemoOrderStatus.assigned ||
-                  status == DemoOrderStatus.accepted,
-            ),
-            _buildTrackingStep(
-              index: 2,
-              title: 'Out for Delivery',
-              subtitle:
-                  '${activeOrder?.riderName ?? "Rider"} picked up your pizza and is en route',
-              icon: Icons.delivery_dining,
-              isCompleted: status == DemoOrderStatus.pickedUp ||
-                  status == DemoOrderStatus.completed,
-              isCurrent: status == DemoOrderStatus.pickedUp,
-            ),
-            _buildTrackingStep(
-              index: 3,
-              title: 'Delivered Hot & Fresh',
-              subtitle: status == DemoOrderStatus.completed
-                  ? 'Feast completed! +${activeOrder?.pointsEarned ?? 0} points added'
-                  : 'Enjoy your Mr. Pizza feast!',
-              icon: Icons.home,
-              isCompleted: status == DemoOrderStatus.completed,
-              isCurrent: status == DemoOrderStatus.completed,
-              isLast: true,
-            ),
-
-            const SizedBox(height: 20),
           ],
-        ),
+          AnimatedOrderStatusHeader(
+            tracking: tracking,
+            pulseKey: trackingPulseKey(tracking),
+          ),
+          const SizedBox(height: 20),
+          _buildRiderSection(context, tracking),
+          _buildDeliveryPanel(context, tracking),
+          const SizedBox(height: 24),
+          _buildItemsSection(context, tracking),
+          const SizedBox(height: 24),
+          _buildPipelineSection(context, tracking),
+          if (tracking.timeline.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _buildHistorySection(context),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildTrackingStep({
-    required int index,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required bool isCompleted,
-    bool isCurrent = false,
-    bool isLast = false,
-  }) {
-    final color = isCurrent
-        ? AppColors.primary
-        : isCompleted
-            ? AppColors.success
-            : AppColors.textLight;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.13),
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: color, width: isCurrent ? 2 : 1.4),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 36,
-                color: isCompleted
-                    ? AppColors.success.withValues(alpha: 0.5)
-                    : AppColors.border,
-              ),
-          ],
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  /// The rider the branch actually assigned, with a call button only when there
+  /// is a real number to dial.
+  ///
+  /// The card grows into place when the assignment lands. That is the moment a
+  /// customer is actually waiting for, so it gets motion rather than appearing
+  /// silently between one frame and the next.
+  Widget _buildRiderSection(BuildContext context, OrderTracking tracking) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: tracking.rider == null
+          ? const SizedBox(width: double.infinity)
+          : Column(
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color:
-                        isCurrent ? AppColors.primary : AppColors.textPrimary,
-                    fontFamily: AppTheme.fontFamily,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
+                _buildRiderCard(context, tracking),
+                const SizedBox(height: 20),
               ],
             ),
-          ),
-        ),
-      ],
     );
   }
 
-  Widget _buildOrderItemsSection(DemoOrder? activeOrder) {
-    final snapshot = ref.watch(lastOrderSnapshotProvider);
-    final items = (activeOrder?.items.isNotEmpty ?? false)
-        ? activeOrder!.items
-        : (snapshot?.items ?? const <CartItem>[]);
+  Widget _buildRiderCard(BuildContext context, OrderTracking tracking) {
+    final rider = tracking.rider!;
+    final name = rider.fullName ?? 'Your rider';
+    final assignment = riderAssignmentLabel(rider.assignmentStatus);
 
-    if (items.isEmpty) return const SizedBox.shrink();
+    return MrCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primaryTint,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.borderDeep),
+            ),
+            child: const Icon(Icons.delivery_dining,
+                color: AppColors.primary, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 3),
+                Text(
+                  assignment,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          if (rider.canBeCalled)
+            IconButton(
+              tooltip: 'Call your rider',
+              icon: const MrIconWell(
+                icon: Icons.call_rounded,
+                color: AppColors.success,
+                background: Color(0xFFE4F1E8),
+              ),
+              onPressed: () => _callRider(context, name, rider.phone!),
+            ),
+        ],
+      ),
+    );
+  }
 
-    final total = activeOrder?.total ?? snapshot?.totals.total ?? 0.0;
+  /// Where the order is going, from the address frozen onto the order row.
+  ///
+  /// This replaces the old "live map": a hand-drawn grid of fake roads with a
+  /// rider pin on it and the line "Rider Marco is 1.2 km away from your
+  /// location". No rider coordinates are stored anywhere in the database, so a
+  /// moving marker could only ever have been a decoration. What is real — the
+  /// address the rider is actually going to, and the branch cooking the food —
+  /// is shown instead.
+  Widget _buildDeliveryPanel(BuildContext context, OrderTracking tracking) {
+    final isPickup = tracking.isPickup;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowSoft,
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isPickup ? Icons.storefront_rounded : Icons.home_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                isPickup ? 'Collecting from the branch' : 'Delivering to',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isPickup
+                ? (tracking.branchName ?? 'The branch handling your order')
+                : (tracking.deliveryAddress ??
+                    'No address was saved on this order'),
+            style: const TextStyle(
+              fontFamily: AppTheme.fontFamily,
+              fontSize: 14,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          if (!isPickup && tracking.branchName != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.storefront_rounded,
+                    color: AppColors.textLight, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Being prepared at ${tracking.branchName}',
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 12,
+                      color: AppColors.textLight,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemsSection(BuildContext context, OrderTracking tracking) {
+    if (tracking.items.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,7 +335,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           eyebrow: 'What You Ordered',
           title: 'Order Items',
           trailing: Text(
-            'Rs. ${total.toInt()}',
+            'Rs. ${tracking.total.toInt()}',
             style: const TextStyle(
               fontFamily: AppTheme.fontFamily,
               fontSize: 13,
@@ -559,15 +345,14 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        ...items.map((cartItem) => _buildOrderItemRow(cartItem)),
+        ...tracking.items.map(_buildItemRow),
         const SizedBox(height: 8),
-        _buildTotalsRow(activeOrder, snapshot),
+        _buildTotalsPanel(),
       ],
     );
   }
 
-  Widget _buildOrderItemRow(CartItem cartItem) {
-    return Container(
+  Widget _buildItemRow(TrackedOrderItem item) {    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -583,10 +368,63 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       ),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(
-              cartItem.item.imageUrl,
+          _buildItemThumbnail(imageUrl: item.imageUrl),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              item.name,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'x${item.quantity}',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Rs. ${item.lineTotal.toInt()}',
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItemThumbnail({required String? imageUrl}) {
+    final url = (imageUrl ?? '').trim();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: url.isEmpty
+          ? Container(
+              width: 48,
+              height: 48,
+              color: AppColors.sand,
+              child: const Center(
+                child: Text('🍕', style: TextStyle(fontSize: 22)),
+              ),
+            )
+          : Image.network(
+              url,
               width: 48,
               height: 48,
               fit: BoxFit.cover,
@@ -598,70 +436,14 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
                     child: Text('🍕', style: TextStyle(fontSize: 22))),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  cartItem.item.title,
-                  style: const TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${cartItem.size.name} • ${cartItem.crust.name}',
-                  style: const TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'x${cartItem.quantity}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Rs. ${cartItem.totalPrice.toInt()}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _buildTotalsRow(DemoOrder? activeOrder, LastOrderSnapshot? snapshot) {
-    final subtotal =
-        activeOrder?.subtotal ?? snapshot?.totals.subtotal ?? 0.0;
-    final tax = activeOrder?.tax ?? snapshot?.totals.tax ?? 0.0;
-    final deliveryFee =
-        activeOrder?.deliveryFee ?? snapshot?.totals.deliveryFee ?? 0.0;
-    final discount = activeOrder?.discount ?? 0.0;
-    final total = activeOrder?.total ?? snapshot?.totals.total ?? 0.0;
-
+  /// The money lines, all read from the `orders` row.
+  ///
+  /// The total is the database's, not a subtraction done in the widget — the
+  /// same figure the kitchen, the ledger and the receipt are working from.
+  Widget _buildTotalsPanel() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -670,18 +452,20 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
       ),
       child: Column(
         children: [
-          _totalLine('Subtotal', 'Rs. ${subtotal.toInt()}'),
-          const SizedBox(height: 4),
-          _totalLine('Tax (8%)', 'Rs. ${tax.toInt()}'),
-          if (deliveryFee > 0) ...[
+          _totalLine('Subtotal', 'Rs. ${tracking.subtotal.toInt()}'),
+          if (tracking.tax > 0) ...[
             const SizedBox(height: 4),
-            _totalLine('Delivery', 'Rs. ${deliveryFee.toInt()}'),
+            _totalLine('Tax', 'Rs. ${tracking.tax.toInt()}'),
           ],
-          if (discount > 0) ...[
+          if (tracking.deliveryCharges > 0) ...[
+            const SizedBox(height: 4),
+            _totalLine('Delivery', 'Rs. ${tracking.deliveryCharges.toInt()}'),
+          ],
+          if (tracking.discountAmount > 0) ...[
             const SizedBox(height: 4),
             _totalLine(
-              'Voucher Discount (${activeOrder?.voucherCode ?? ""})',
-              '-Rs. ${discount.toInt()}',
+              'Voucher Discount',
+              '-Rs. ${tracking.discountAmount.toInt()}',
               isDiscount: true,
             ),
           ],
@@ -689,11 +473,7 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: AppColors.border, height: 1),
           ),
-          _totalLine(
-            'Total',
-            'Rs. ${total.toInt()}',
-            bold: true,
-          ),
+          _totalLine('Total', 'Rs. ${tracking.total.toInt()}', bold: true),
         ],
       ),
     );
@@ -715,10 +495,273 @@ class _OrderTrackingScreenState extends ConsumerState<OrderTrackingScreen> {
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: style),
+        // Both sides are flexed: a long voucher label or a four-figure total
+        // must wrap instead of striping the edge of the customer's phone.
+        Expanded(
+          child: Text(label, style: style, overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: 10),
         Text(value, style: style),
       ],
+    );
+  }
+
+  /// The five real steps, lit by the stage the order is actually in.
+  ///
+  /// The old version's second step was permanently titled "Baking in Wood-Fired
+  /// Oven" and was marked done purely by which fake enum value was in memory.
+  /// Both now come from `orders.status`, including the "ready for pickup" stage
+  /// the branch added so a customer can see their food bagged and waiting for a
+  /// rider rather than still being cooked.
+  Widget _buildPipelineSection(BuildContext context, OrderTracking tracking) {
+    final stage = tracking.stage;
+    final reached = pipelineProgressFor(stage);
+    final riderName = tracking.rider?.fullName;
+    final onTheWaySubtitle = riderName == null
+        ? 'A rider is bringing your order'
+        : '$riderName is bringing your order';
+
+    final steps = <_PipelineStep>[
+      const _PipelineStep(
+        title: 'Order Confirmed',
+        subtitle: 'The branch has your order',
+        icon: Icons.check_circle,
+      ),
+      const _PipelineStep(
+        title: 'Preparing Your Food',
+        subtitle: 'The kitchen is cooking your order',
+        icon: Icons.local_fire_department,
+      ),
+      const _PipelineStep(
+        title: 'Ready for Pickup',
+        subtitle: 'Your food is packed and waiting for the rider',
+        icon: Icons.takeout_dining_rounded,
+      ),
+      _PipelineStep(
+        title: 'On The Way',
+        subtitle: onTheWaySubtitle,
+        icon: Icons.delivery_dining,
+      ),
+      const _PipelineStep(
+        title: 'Delivered',
+        subtitle: 'Enjoy your Mr. Pizza order',
+        icon: Icons.home,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MrSectionTitle(eyebrow: 'Progress', title: 'Order Pipeline'),
+        const SizedBox(height: 18),
+        ...steps.asMap().entries.map((entry) {
+          final index = entry.key;
+          return _buildTrackingStep(
+            context: context,
+            index: index,
+            step: entry.value,
+            isCompleted: index < reached,
+            isCurrent: index == reached,
+            isLast: index == steps.length - 1,
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildTrackingStep({
+    required BuildContext context,
+    required int index,
+    required _PipelineStep step,
+    required bool isCompleted,
+    required bool isCurrent,
+    required bool isLast,
+  }) {
+    final color = isCurrent
+        ? AppColors.primary
+        : isCompleted
+            ? AppColors.success
+            : AppColors.textLight;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            PulsingStepRing(
+              active: isCurrent,
+              color: AppColors.primary,
+              child: Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.13),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color, width: isCurrent ? 2 : 1.4),
+                ),
+                child: Icon(step.icon, color: color, size: 20),
+              ),
+            ),
+            AnimatedStepConnector(
+              filled: isCompleted,
+              isLast: isLast,
+            ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 320),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color:
+                        isCurrent ? AppColors.primary : AppColors.textPrimary,
+                    fontFamily: AppTheme.fontFamily,
+                  ),
+                  child: Text(step.title),
+                ),
+                const SizedBox(height: 2),
+                Text(step.subtitle, style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The status changes the branch and the rider actually recorded, with the
+  /// times they recorded them.
+  Widget _buildHistorySection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const MrSectionTitle(eyebrow: 'Record', title: 'Status History'),
+        const SizedBox(height: 14),
+        ...tracking.timeline.reversed.map(
+          (change) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded,
+                    size: 16, color: AppColors.success),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    statusLabel(change.status),
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  change.changedAt == null
+                      ? ''
+                      : '${formatClockTime(change.changedAt!)}  ${formatDayLabel(change.changedAt!)}',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 11,
+                    color: AppColors.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _callRider(BuildContext context, String name, String phone) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final uri = Uri(scheme: 'tel', path: phone);
+
+    final launched = await launchUrl(uri);
+    if (launched) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Could not start a call to $name.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _PipelineStep {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _PipelineStep({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+}
+
+/// A read that failed, or a screen with no real order behind it. Both say so
+/// plainly instead of rendering a placeholder order.
+class _TrackingProblem extends StatelessWidget {
+  const _TrackingProblem({
+    required this.title,
+    required this.detail,
+    this.onRetry,
+  });
+
+  final String title;
+  final String detail;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.receipt_long_rounded,
+                size: 44, color: AppColors.textLight),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.45,
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 10),
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

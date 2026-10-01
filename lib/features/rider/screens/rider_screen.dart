@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
+import '../../../widgets/app_drawer.dart';
 import '../data/rider_repository.dart';
 import '../logic/delivery_actions.dart';
 import '../models/rider_availability.dart';
@@ -25,6 +26,7 @@ class RiderScreen extends ConsumerWidget {
     final detailsAsync = ref.watch(riderDetailsProvider);
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Rider Dashboard'),
         actions: [

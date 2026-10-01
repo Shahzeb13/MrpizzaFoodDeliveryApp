@@ -24,6 +24,10 @@ abstract final class AppColors {
   static const Color success = Color(0xFF2F7D4F);     // Warm Leaf Green
   static const Color warning = Color(0xFFC0691F);     // Spiced Orange
 
+  // Bad news. Deliberately deeper and less orange than [primary] so a cancelled
+  // order is never mistaken for the brand's normal action colour.
+  static const Color danger = Color(0xFF8E1F2A);     // Deep Crimson
+
   // Backgrounds & Surfaces (Warm Ivory Family — single warm gray hue)
   static const Color background = Color(0xFFFBF5EE);  // Warm Ivory
   static const Color surface = Color(0xFFFFFFFF);    // Crisp White

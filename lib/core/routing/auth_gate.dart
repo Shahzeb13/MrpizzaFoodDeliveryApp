@@ -20,7 +20,7 @@ import 'router.dart';
 /// per-screen auth checks.
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
-
+  //build\app\outputs\flutter-apk\app-debug.apk
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
