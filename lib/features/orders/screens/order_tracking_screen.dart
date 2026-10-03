@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
+import '../../loyalty/providers/loyalty_provider.dart';
+import '../../loyalty/widgets/spend_points_control.dart';
 import '../models/order_tracking.dart';
 import '../presentation/order_status_copy.dart';
 import '../providers/order_tracking_provider.dart';
@@ -117,6 +119,28 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   /// line.
   OrderTracking get tracking => widget.tracking;
 
+  @override
+  void didUpdateWidget(covariant _OrderTrackingBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final previous = oldWidget.tracking.status;
+    final current = widget.tracking.status;
+    if (previous == current) return;
+
+    // Reaching `delivered` credits points through a database trigger, and
+    // reaching `cancelled` refunds whatever was spent on this order. Both write
+    // a ledger row the app is not subscribed to, so the balance held in memory is
+    // now stale and has to be re-read — otherwise the customer watches their
+    // points stay put through the exact moment they changed.
+    if (_creditsPoints(current) || _creditsPoints(previous)) {
+      refreshLoyaltyBalance(ref);
+    }
+  }
+
+  /// True for the statuses at which the database moves points by itself.
+  static bool _creditsPoints(String status) =>
+      status == 'delivered' || status == 'cancelled';
+
   void _announceStageChange(OrderStage stage, String status) {
     setState(() {
       _announcedStage = stage;
@@ -128,9 +152,16 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   Widget build(BuildContext context) {
     final tracking = widget.tracking;
 
+    // Watched rather than only invalidated: watching is what makes the
+    // `refreshLoyaltyBalance` calls in `didUpdateWidget` actually re-read, and
+    // it is where the points credited for this order come from.
+    final loyalty = ref.watch(loyaltyBalanceProvider).valueOrNull;
+    final pointsEarned = loyalty?.pointsEarnedOnOrder(tracking.orderId) ?? 0;
+
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(activeOrderTrackingProvider);
+        refreshLoyaltyBalance(ref);
         await ref.read(activeOrderTrackingProvider.future);
       },
       child: ListView(
@@ -157,6 +188,10 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
           _buildDeliveryPanel(context, tracking),
           const SizedBox(height: 24),
           _buildItemsSection(context, tracking),
+          if (pointsEarned > 0) ...[
+            const SizedBox(height: 16),
+            _buildPointsCreditedCard(context, pointsEarned),
+          ],
           const SizedBox(height: 24),
           _buildPipelineSection(context, tracking),
           if (tracking.timeline.isNotEmpty) ...[
@@ -352,6 +387,47 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     );
   }
 
+  /// The points this order actually credited, read from the ledger row the
+  /// delivery trigger wrote.
+  ///
+  /// Not derived from the order total: the rate is a setting the admin controls,
+  /// so the only figure that cannot drift from the admin panel is the one the
+  /// ledger recorded.
+  Widget _buildPointsCreditedCard(BuildContext context, int pointsEarned) {
+    return MrCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(18),
+      color: AppColors.goldTint,
+      child: Row(
+        children: [
+          const MrIconWell(
+            icon: Icons.stars_rounded,
+            color: AppColors.accent,
+            background: AppColors.surface,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You earned ${formatPoints(pointsEarned)} points',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Already added to your balance — spend them on your next '
+                  'order.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildItemRow(TrackedOrderItem item) {    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -464,7 +540,11 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
           if (tracking.discountAmount > 0) ...[
             const SizedBox(height: 4),
             _totalLine(
-              'Voucher Discount',
+              // Deliberately not "Voucher Discount": `redeem_loyalty_points`
+              // writes to the same `orders.discount_amount` column, so a voucher
+              // label here would leave the customer looking for a voucher they
+              // never used on an order where they spent points.
+              'Discount Applied',
               '-Rs. ${tracking.discountAmount.toInt()}',
               isDiscount: true,
             ),

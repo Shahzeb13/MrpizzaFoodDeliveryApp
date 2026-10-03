@@ -8,6 +8,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../loyalty/providers/loyalty_provider.dart';
+import '../../loyalty/widgets/spend_points_control.dart';
 import '../providers/profile_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -84,6 +86,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final currentRole = ref.watch(roleProvider).value ?? UserRole.customer;
     final profileAsync = ref.watch(profileFutureProvider);
+    final loyalty = ref.watch(loyaltyBalanceProvider).valueOrNull;
     final email = ref.watch(authStateProvider).user?.email ?? '';
 
     final profile = profileAsync.when(
@@ -174,11 +177,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 10),
-                        const MrEyebrow(
-                          text: '450 Pizza VIP Points',
-                          background: AppColors.goldTint,
-                          foreground: Color(0xFF9A6B1F),
-                        ),
+                        // Was a literal "450 Pizza VIP Points" on every profile
+                        // in the app, for every customer, whether they had any
+                        // points at all. Now it is the ledger balance.
+                        if (loyalty != null)
+                          MrEyebrow(
+                            text: '${formatPoints(loyalty.balance)} Pizza '
+                                'Points',
+                            background: AppColors.goldTint,
+                            foreground: const Color(0xFF9A6B1F),
+                          ),
                       ],
                     ),
                   ),

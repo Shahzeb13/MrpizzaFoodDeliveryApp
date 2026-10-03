@@ -9,6 +9,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
 import '../../menu/providers/menu_provider.dart';
+import '../../loyalty/data/loyalty_repository.dart';
+import '../../loyalty/models/loyalty.dart';
+import '../../loyalty/providers/loyalty_provider.dart';
+import '../../loyalty/widgets/spend_points_control.dart';
 import '../../orders/data/orders_repository.dart';
 import '../../orders/models/branch.dart';
 import '../../orders/models/order.dart';
@@ -42,6 +46,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   /// What the applied voucher takes off, straight from the database.
   double get _voucherDiscount => _appliedVoucher?.discountAmount ?? 0;
+
+  /// How many points the customer asked to spend on this order.
+  ///
+  /// A request, not a grant. The number the customer was shown is a ceiling:
+  /// `redeem_loyalty_points` clamps it to what the order can absorb and rounds
+  /// down to whole points, and only that answer decides what the order is worth.
+  int _pointsToSpend = 0;
 
   /// The branches currently loaded, or an empty list before the first load.
   /// Empty (not bundled) on purpose: inventing branches here would let an
@@ -687,6 +698,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     }
 
+    // Points are claimed after the voucher, never before. Both write to
+    // `orders.discount_amount`, and a voucher applied on top of a points
+    // discount overwrites the points saving off the bill while the ledger keeps
+    // the debit — so the customer would lose the points with nothing to show for
+    // them. This order is the only order the sequence is chosen for.
+    final pendingPoints = _pointsToSpend;
+    LoyaltyRedemption? pointsRedemption;
+    if (pendingPoints > 0) {
+      try {
+        // The verdict is kept either way: a refusal carries the database's own
+        // wording — "You have N points available", "Points can only be spent
+        // before an order is delivered" — which is more useful than anything
+        // generic said in its place, and the order still stands.
+        pointsRedemption = await ref.read(loyaltyRepositoryProvider)
+            .redeemPoints(orderId: placedOrderId, points: pendingPoints);
+      } catch (_) {
+        pointsRedemption = null;
+      }
+    }
+
+    // Points moved, so the cached balance is now wrong. Re-read rather than
+    // subtracting locally: the ledger is the only thing that knows the true
+    // figure, and a clamped spend makes arithmetic guesswork.
+    if (pendingPoints > 0) {
+      refreshLoyaltyBalance(ref);
+    }
+
     // Hand the real order id to the tracking screen. It used to build a
     // `DemoOrder` in memory here, which is why the tracking screen showed a
     // rider called "Test Rider" and a hardcoded kitchen headline for an order
@@ -704,6 +742,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (!mounted) return;
     if (voucherWarning.isNotEmpty) {
       _showMessage(voucherWarning, isError: true);
+    } else if (pointsRedemption != null) {
+      // The database's own numbers, not a figure worked out here. If it clamped
+      // the request, `message` says what was actually spent.
+      _showMessage(
+        pointsRedemption.message,
+        isError: !pointsRedemption.ok,
+      );
     }
     context.go('/orders/track');
   }
@@ -884,6 +929,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ..._buildPickupSection(branchesAsync, checkout),
           const SizedBox(height: 20),
           _buildVoucherSection(totals),
+          const SizedBox(height: 20),
+          SpendPointsControl(
+            points: _pointsToSpend,
+            onChanged: (value) => setState(() => _pointsToSpend = value),
+          ),
           const SizedBox(height: 20),
           _buildSummarySection(checkout, totals),
           const SizedBox(height: 30),
