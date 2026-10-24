@@ -104,6 +104,11 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
   /// Stops the post-frame write from being queued on every rebuild.
   String? _recordedTerminalFor;
 
+  /// Which order this widget already released the pin for, because the database
+  /// said it no longer exists. Same reason as [_recordedTerminalFor]: the write
+  /// is queued, and without a marker every rebuild would queue another one.
+  String? _releasedMissingFor;
+
   @override
   void initState() {
     super.initState();
@@ -204,6 +209,34 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
     });
   }
 
+  /// Frees the bar when the order it was following no longer exists.
+  ///
+  /// The pin is what stops the bar wandering backwards into older orders, so a
+  /// pin left pointing at a deleted order is a bar that can never adopt anything
+  /// else for the rest of the session — it would simply sit empty while the
+  /// customer has a perfectly good order in flight.
+  ///
+  /// Guarded hard, because the two ways [trackingAsync] holds a null are very
+  /// different. A read still in flight, or one that failed, says nothing about
+  /// whether the order is real; releasing on either would unpin an order that is
+  /// sitting in the kitchen and start adoption and release trading places. Only
+  /// a settled stream that has come back empty is an answer from the database.
+  void _releaseOrderThatNoLongerExists(AsyncValue<OrderTracking?> trackingAsync) {
+    if (trackingAsync.isLoading || trackingAsync.hasError) return;
+
+    final pinned = ref.read(pinnedLiveOrderIdProvider);
+    if (pinned == null || pinned.isEmpty) return;
+    if (_releasedMissingFor == pinned) return;
+
+    _releasedMissingFor = pinned;
+    // Deferred out of build for the same reason the terminal-state write above
+    // is: this writes providers the bar is being built from.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      stopFollowingLiveOrder(ref, pinned);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final trackingAsync = ref.watch(liveOrderTrackingProvider);
@@ -221,9 +254,11 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
     if (visibility == LiveOrderVisibility.hidden || tracking == null) {
       _deliveredAutoHideTimer?.cancel();
       _recordedTerminalFor = null;
+      _releaseOrderThatNoLongerExists(trackingAsync);
       return const SizedBox.shrink();
     }
 
+    _releasedMissingFor = null;
     _scheduleDeliveredAutoHide(tracking);
     _recordTerminalStateOnce(tracking, visibility);
 
@@ -338,7 +373,7 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
                 ],
               ),
               const SizedBox(height: 11),
-              _buildProgressTrack(stage, accent, visibility),
+              _buildProgressTrack(tracking, accent, visibility),
               if (isEnding) ...[
                 const SizedBox(height: 10),
                 _buildDismissRow(tracking.orderId),
@@ -449,16 +484,18 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
   }
 
   Widget _buildProgressTrack(
-    OrderStage stage,
+    OrderTracking tracking,
     Color accent,
     LiveOrderVisibility visibility,
   ) {
+    final stage = tracking.stage;
     // A cancelled order never completed any step, so filling by pipeline
     // progress would draw an empty track — indistinguishable from "we have not
     // started yet". Filling it solid in the danger colour says "this ended".
     final fraction = visibility == LiveOrderVisibility.cancelled
         ? 1.0
-        : pipelineProgressFor(stage) / OrderTracking.pipelineStepCount;
+        : pipelineProgressFor(stage, stepCount: tracking.pipelineLength) /
+            tracking.pipelineLength;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: fraction),

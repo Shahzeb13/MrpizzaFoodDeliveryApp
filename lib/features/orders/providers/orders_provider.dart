@@ -25,6 +25,17 @@ final lastOrderSnapshotProvider =
 final ordersRepositoryProvider =
     Provider<OrdersRepository>((ref) => OrdersRepository());
 
+/// The delivery fee charged by one branch.
+///
+/// Null means that branch has not been given a fee yet, which the checkout
+/// screen reports rather than quietly charging nothing: a missing fee read as
+/// zero is free delivery that nobody chose. Keyed by branch id, so switching
+/// branch at checkout re-reads rather than reusing the previous branch's fee.
+final branchDeliveryFeeProvider =
+    FutureProvider.family<double?, String>((ref, branchId) {
+  return ref.watch(ordersRepositoryProvider).fetchBranchDeliveryFee(branchId);
+});
+
 /// The restaurant branches, loaded once and used for branch selection.
 /// Wrapped in a [BranchCatalog] so the UI can tell real database rows apart
 /// from the bundled offline fallback.

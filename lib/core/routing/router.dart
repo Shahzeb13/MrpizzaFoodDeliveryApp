@@ -9,17 +9,20 @@ import '../../features/home/screens/home_screen.dart';
 import '../../features/menu/screens/menu_screen.dart';
 import '../../features/orders/screens/my_orders_screen.dart';
 import '../../features/orders/screens/order_tracking_screen.dart';
+import '../../features/payment/screens/apply_discount_screen.dart';
 import '../../features/payment/screens/checkout_screen.dart';
+import '../../features/payment/screens/payment_method_screen.dart';
 import '../../features/profile/screens/account_deletion_screen.dart';
 import '../../features/profile/screens/addresses_screen.dart';
 import '../../features/profile/screens/favorites_screen.dart';
 import '../../features/profile/screens/loyalty_points_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/support_center_screen.dart';
+import '../../features/profile/screens/support_document_screen.dart';
 import '../../features/profile/screens/wallet_screen.dart';
+import '../../features/profile/models/support_document.dart';
 import '../providers/role_provider.dart';
 import 'route_guard.dart';
-import '../../features/rider/screens/rider_earnings_screen.dart';
 import '../../features/rider/screens/rider_history_screen.dart';
 import '../../features/rider/screens/rider_screen.dart';
 
@@ -110,6 +113,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/support',
         builder: (context, state) => const SupportCenterScreen(),
+        routes: [
+          // Policies and FAQs live on the website, so this route carries which
+          // document to show rather than its URL. Only the documents declared in
+          // SupportDocument can be opened; anything else redirects back to the
+          // Support Center instead of loading an arbitrary address.
+          GoRoute(
+            path: 'document/:document',
+            redirect: (context, state) =>
+                SupportDocument.fromSlug(state.pathParameters['document']) ==
+                        null
+                    ? '/support'
+                    : null,
+            builder: (context, state) => SupportDocumentScreen(
+              document: SupportDocument.fromSlug(
+                state.pathParameters['document'],
+              )!,
+            ),
+          ),
+        ],
       ),
       GoRoute(
         path: '/delete-account',
@@ -120,16 +142,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CheckoutScreen(),
       ),
       GoRoute(
+        path: '/apply-discount',
+        builder: (context, state) => const ApplyDiscountScreen(),
+      ),
+      GoRoute(
+        path: '/payment-method',
+        builder: (context, state) => const PaymentMethodScreen(),
+      ),
+      GoRoute(
         path: riderLandingLocation,
         builder: (context, state) => const RiderScreen(),
       ),
       GoRoute(
         path: riderHistoryLocation,
         builder: (context, state) => const RiderHistoryScreen(),
-      ),
-      GoRoute(
-        path: riderEarningsLocation,
-        builder: (context, state) => const RiderEarningsScreen(),
       ),
       GoRoute(
         path: '/profile',

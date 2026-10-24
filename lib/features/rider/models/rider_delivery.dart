@@ -22,6 +22,15 @@ class RiderDelivery {
   final DateTime? pickedUpAt;
   final DateTime? deliveredAt;
 
+  /// 'cod' or 'online', or null on orders placed before cash on delivery
+  /// existed. Null is treated as "not cash" by the UI: an order this old was
+  /// never charged online either, so there is nothing for the rider to collect.
+  final String? paymentMethod;
+
+  /// 'pending' or 'paid'. A cash order stays 'pending' until the rider records
+  /// the money, which is what makes an unpaid job visible instead of silent.
+  final String? paymentStatus;
+
   const RiderDelivery({
     required this.assignmentId,
     required this.orderId,
@@ -39,6 +48,8 @@ class RiderDelivery {
     required this.assignedAt,
     required this.pickedUpAt,
     required this.deliveredAt,
+    this.paymentMethod,
+    this.paymentStatus,
   });
 
   factory RiderDelivery.fromAssignmentRow(Map<String, dynamic> row) {
@@ -59,6 +70,8 @@ class RiderDelivery {
       assignedAt: parseAssignmentTimestamp(row['assigned_at']),
       pickedUpAt: parseAssignmentTimestamp(row['picked_up_at']),
       deliveredAt: parseAssignmentTimestamp(row['delivered_at']),
+      paymentMethod: row['payment_method'] as String?,
+      paymentStatus: row['payment_status'] as String?,
     );
   }
 

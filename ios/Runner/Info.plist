@@ -27,7 +27,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MrPizza uses your location only when you tap "Use My Current Location" on the address form, so we can fill in your delivery address and send your order to the closest branch. You can always type your address instead.</string>
+	<string>MrPizza uses your location only when you tap "Locate Me" on the delivery map (or "Use Current Location" on the address form), so we can centre the map on you and fill in your delivery address. You can always move the map by hand or type your address instead, and the app works the same without this permission.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

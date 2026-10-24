@@ -150,29 +150,28 @@ void main() {
     });
   });
 
-  group('earnings count delivered jobs only', () {
-    test('uses the configured rate, not the delivery charge', () {
-      final earnings = earningsFor(
-        [_delivery('delivered', id: '1'), _delivery('delivered', id: '2')],
-        250,
+  group('the completed count covers delivered jobs only', () {
+    test('counts every delivered job', () {
+      expect(
+        completedCountFor([
+          _delivery('delivered', id: '1'),
+          _delivery('delivered', id: '2'),
+        ]),
+        2,
       );
-      expect(earnings, 500);
     });
 
     test('ignores offers, active and failed jobs', () {
-      final earnings = earningsFor([
-        _delivery('assigned', id: '1'),
-        _delivery('accepted', id: '2'),
-        _delivery('picked_up', id: '3'),
-        _delivery('failed', id: '4'),
-        _delivery('declined', id: '5'),
-      ], 250);
-      expect(earnings, 0);
-    });
-
-    test('an unavailable rate does not invent money', () {
-      expect(earningsFor([_delivery('delivered')], 0), 0);
-      expect(completedCountFor([_delivery('delivered')]), 1);
+      expect(
+        completedCountFor([
+          _delivery('assigned', id: '1'),
+          _delivery('accepted', id: '2'),
+          _delivery('picked_up', id: '3'),
+          _delivery('failed', id: '4'),
+          _delivery('declined', id: '5'),
+        ]),
+        0,
+      );
     });
   });
 }

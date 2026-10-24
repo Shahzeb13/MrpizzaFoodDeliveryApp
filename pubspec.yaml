@@ -45,17 +45,39 @@ dependencies:
   supabase_flutter: ^2.0.0
   flutter_dotenv: ^6.0.0
 
-  # Location capture: GPS fix + OpenStreetMap reverse geocoding
+  # Location capture: GPS fix + Mapbox Geocoding v6 over plain HTTP
   geolocator: ^14.0.3
   http: ^1.2.0
+
+  # Delivery map: Mapbox Maps SDK for Flutter (v3 API).
+  # v3 requires Flutter >= 3.38.1 and Dart >= 3.10.0, which this project has.
+  # The public token is supplied at runtime from MAPBOX_ACCESS_TOKEN.
+  mapbox_maps_flutter: ^3.0.0
+
+  # Geometry types (Point/Position) re-exported by the Mapbox SDK. Declared
+  # directly because the delivery map constructs camera centres with them.
+  turf: ^0.0.14
 
   # Rider hands-off: dialling the customer and opening the delivery address
   # in whatever maps app the phone has.
   url_launcher: ^6.3.0
 
+  # Policies and FAQs: the terms, privacy, return, refund and FAQ pages that
+  # live on mrpizzapak.com are shown in-app rather than copied into Dart, so
+  # the published page is always the one the customer agrees to.
+  webview_flutter: ^4.14.1
+
   # Live updates: the rider dashboard re-reads assignments as the shop assigns,
   # accepts and delivers them.
   realtime_client: ^2.11.0
+
+  # PayFast gateway checkout (WebView redirection). Vendored locally rather
+  # than pulled from git so the merchant flow can be pinned and edited in
+  # tree; see packages/payfast_flutter_sdk/README.md for the platform setup.
+  payfast_flutter_sdk:
+    path: packages/payfast_flutter_sdk
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
 
 dev_dependencies:
   flutter_test:

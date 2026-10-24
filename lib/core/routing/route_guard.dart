@@ -22,13 +22,10 @@ const publicLocations = <String>{
 
 const riderHistoryLocation = '/rider/history';
 
-const riderEarningsLocation = '/rider/earnings';
-
 /// Screens that only a signed-in rider may open.
 const riderOnlyLocations = <String>{
   riderLandingLocation,
   riderHistoryLocation,
-  riderEarningsLocation,
 };
 
 /// The first screen a user with [role] should see.

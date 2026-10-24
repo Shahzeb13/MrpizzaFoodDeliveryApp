@@ -322,6 +322,22 @@ class OrderTracking {
   /// be told that, and a real app shows it as its own step.
   static const int pipelineStepCount = 5;
 
+  /// The number of stages a PICKUP order passes through. Three: confirmed,
+  /// cooking, bagged, then collected.
+  ///
+  /// The two steps in between — a rider heading to the branch, and the order
+  /// being carried to a door — describe nobody. There is no rider on a pickup
+  /// order and nothing is going anywhere, so drawing them on the progress track
+  /// is two lines of fiction about a pizza that is sitting on a shelf waiting
+  /// to be picked up.
+  static const int pickupPipelineStepCount = 3;
+
+  /// How many steps THIS order's progress track has.
+  ///
+  /// Per order rather than global, because it is decided by [isPickup] and the
+  /// same screen renders both kinds.
+  int get pipelineLength => isPickup ? pickupPipelineStepCount : pipelineStepCount;
+
   bool get isStillMoving => isOrderStillMoving(stage);
 
   /// Reads the `jsonb` from `order_tracking()`.

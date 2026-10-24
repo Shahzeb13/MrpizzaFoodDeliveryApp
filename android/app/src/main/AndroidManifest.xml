@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Customer "use my location" on the address form. Coarse is enough as a
-         fallback; the app asks for fine location at runtime. -->
+    <!-- Customer "Locate Me" on the delivery map and "Use Current Location" on
+         the address form. Coarse is enough as a fallback; the app asks for fine
+         location at runtime, and only when the customer taps the button —
+         moving the map by hand needs no permission at all.
+         Mapbox's SDK downloads its styles and tiles over the network, which
+         INTERNET already covers. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -36,6 +40,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Flutter's Impeller renderer on Vulkan is not usable on the budget
+             Mali GPUs this app ships to: their gralloc driver rejects the
+             HardwareBuffer formats Impeller asks for
+             ("AHardwareBuffer: GraphicBuffer failed" in logcat) and the map
+             stutters. Impeller also runs its own Vulkan context alongside the
+             OpenGL ES context the Mapbox SDK needs, which the driver cannot
+             serve well. Skia over OpenGL ES is the pairing Mapbox expects.
+             Re-enable Impeller only once the minimum supported device class
+             ships a Vulkan driver that allocates those buffers correctly. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "466821142332",
+    "project_id": "mrpizza-5074f",
+    "storage_bucket": "mrpizza-5074f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:466821142332:android:fe76a682177ab978bbb039",
+        "android_client_info": {
+          "package_name": "com.example.mrpizza"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDc2GskgVRJ_h_USc4sy75unK0Xxr8l6ak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,6 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mrpizza/features/orders/models/order.dart';
 
+/// Stands in for a branch's configured fee. The real figure comes from
+/// `store_settings` per branch, so the test fixes one rather than relying on a
+/// constant that no longer exists in the app.
+const _branchDeliveryFee = 150.0;
+
 Order _order({
   String customerName = '',
   String customerPhone = '',
@@ -15,7 +20,11 @@ Order _order({
       branchId: 'b1',
       addressId: addressId,
       orderType: orderType,
-      totals: OrderTotals(subtotal: 1000, orderType: orderType),
+      totals: OrderTotals(
+        subtotal: 1000,
+        orderType: orderType,
+        branchDeliveryFee: _branchDeliveryFee,
+      ),
       items: const [],
       customerName: customerName,
       customerPhone: customerPhone,
@@ -78,7 +87,37 @@ void main() {
     expect(map['status'], 'confirmed');
     expect(map['subtotal'], 1000);
     expect(map['tax'], OrderTotals.taxRate * 1000);
-    expect(map['delivery_charges'], OrderTotals.deliveryCharge);
-    expect(map['total'], 1000 + (OrderTotals.taxRate * 1000) + OrderTotals.deliveryCharge);
+    expect(map['delivery_charges'], _branchDeliveryFee);
+    expect(map['total'], 1000 + (OrderTotals.taxRate * 1000) + _branchDeliveryFee);
+  });
+
+  test('the delivery fee is the branch''s own figure, not a fixed one', () {
+    // The two branches charge differently, so the fee has to arrive from the
+    // branch rather than from a constant. A test that only ever passed 150
+    // would not notice the hardcoded value coming back.
+    final mansehra = OrderTotals(
+      subtotal: 1000,
+      orderType: OrderType.delivery,
+      branchDeliveryFee: 90,
+    );
+    final abbottabad = OrderTotals(
+      subtotal: 1000,
+      orderType: OrderType.delivery,
+      branchDeliveryFee: 150,
+    );
+
+    expect(mansehra.deliveryFee, 90);
+    expect(abbottabad.deliveryFee, 150);
+    expect(mansehra.total, isNot(abbottabad.total));
+  });
+
+  test('pickup is never charged a delivery fee, whatever the branch says', () {
+    final totals = OrderTotals(
+      subtotal: 1000,
+      orderType: OrderType.pickup,
+      branchDeliveryFee: 150,
+    );
+
+    expect(totals.deliveryFee, 0);
   });
 }

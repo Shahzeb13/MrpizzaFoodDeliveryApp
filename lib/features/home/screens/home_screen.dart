@@ -53,21 +53,30 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
   bool _isProgrammaticScroll = false;
   final TextEditingController _searchController = TextEditingController();
 
+  /// Opens the delivery-location modal.
+  ///
+  /// This is the customer's one place to say where an order goes: "use where I
+  /// am", "pick it on the map", a saved place, or free text. The map itself is
+  /// a sheet that opens over this, not a screen that takes over the app.
+  void _openLocationPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => const LocationSelectionDialog(),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
 
-    // Prompt location dialog on initial app view if not set
+    // Ask for a delivery location on first view. It is a modal the customer can
+    // dismiss, so browsing the menu is never blocked.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final locState = ref.read(locationProvider);
         if (!locState.isSet) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => const LocationSelectionDialog(),
-          );
+          _openLocationPicker();
         }
       }
     });
@@ -186,12 +195,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
                 ),
               )
             : GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => const LocationSelectionDialog(),
-                  );
-                },
+                onTap: _openLocationPicker,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,

@@ -94,6 +94,9 @@ only when Android/native configuration, plugins, permissions, Gradle, or APK-lev
 
 ---
 
+### Answer to prompts
+Use simple english everytime when explaining something! like easy english as possible
+
 ## Scope Control
 
 Stay within the user's requested task.
@@ -121,10 +124,22 @@ Report unrelated issues separately instead of expanding the task.
 
 ## Location Capture
 
-* GPS only, no map picker: `geolocator` (`lib/features/location/data/geolocator_device_location_source.dart`) reads the fix; there is no Google Maps dependency.
-* Street address text comes from OpenStreetMap Nominatim (`nominatim_address_lookup.dart`) — no API key.
-* Nominatim's usage policy requires a real contact in the User-Agent: `nominatimUserAgent` in `lib/core/providers/location_provider.dart` still has a placeholder email and **must be replaced before release**.
+* GPS fix via `geolocator` (`lib/features/location/data/geolocator_device_location_source.dart`); the delivery map is Mapbox Maps SDK for Flutter (`mapbox_maps_flutter` **v3** — `MapWidget.viewport` + `ViewportController`, not the v2 `cameraOptions` API). There is no Google Maps dependency.
+* The picker is `lib/features/location/screens/map_location_picker_screen.dart`, routed at `/select-location` (`selectLocationLocation`). It replaces `LocationSelectionDialog` as the entry point from Home and from checkout; the dialog stays reachable as its "Type an address instead" fallback and is what runs when no Mapbox token is configured.
+* The pin is a Flutter overlay centred on the camera's optical centre, held there by camera padding equal to the bottom panel's height (`_syncCameraPadding`). Changing one without the other makes the pin and the selected coordinate disagree.
+* `MapboxConfig` (`lib/core/config/mapbox_config.dart`) reads `MAPBOX_ACCESS_TOKEN` from `--dart-define` first, then `.env`. `main()` calls `MapboxOptions.setAccessToken` before `runApp` — Flutter's `.env` loader only fills Dart values, so nothing about Mapbox is configured natively without it.
+* **Only a public `pk.` token may reach the app.** `MapboxConfig.usableToken` returns null for an `sk.` value, so a misconfigured build shows "map unavailable" instead of shipping account access in the binary.
+* Address and place names come from the **Mapbox Search Box API** (`lib/features/location/data/geocoding_service.dart`) — plain HTTP, no extra SDK, reusing the same public `pk.` token the map already runs on via `MapboxConfig.usableToken`. It replaced OpenStreetMap Nominatim, which needed a real contact in its User-Agent and answered 403 when that contact was a placeholder.
+* **Search Box, not Geocoding v6.** v6 dropped point-of-interest data entirely, so it could only ever answer "Abbottabad" — never a hotel or shop on that road. There is no v6 code left in the project; do not reintroduce it.
+* The one service does both directions: `getPlaceName(lat, lng)` reverse for the pin, `lookupCoordinates(query)` forward so a typed address still gains a pin for nearest-branch matching.
+* **Reverse makes up to two requests, in order, stopping at the first that answers**: `types=poi` (hotels, shops, landmarks) first, then `types=address,street`. A landmark is what a rider can act on, so it is asked for before a street. Both empty means null.
+* The label is `name`, then the address: `"Triple One Hotel, Abbottabad, Pakistan"`. `full_address` is used for the second half, falling back to `place_formatted`; a feature with no name shows the address alone.
+* `/reverse` takes **no `session_token`** — only `/suggest` and `/retrieve` do. Never add one.
+* Reverse runs **only on map idle** — the moment the customer stops moving the map — never on a camera frame. `getPlaceName` names the pin and fills the address field from that one answer.
+* Search Box data is for **temporary use only** under the Mapbox terms. Never cache it and never store it: a cached place name goes stale the moment the pin moves.
+* A slow answer is dropped rather than shown, so an old pin's name can never overwrite the newest one.
 * Location is optional. Permission denied / blocked / services off / GPS timeout / reverse-geocode failure must all leave manual address entry usable — never block checkout.
+* Mapbox attribution and logo are required and are moved to the top of the map, not hidden, because the bottom panel covers their default position.
 * Failures surface as `LocationCaptureException` and `LocationState.errorMessage`.
 * A reverse-geocode failure keeps the GPS pin and leaves the address text empty.
 * A hand-typed address clears the pin (`LocationNotifier.setLocation`) so a stale pin can never match the branch to the wrong place.
@@ -136,6 +151,8 @@ Report unrelated issues separately instead of expanding the task.
   * `ACCESS_FINE_LOCATION`
   * `ACCESS_COARSE_LOCATION`
   * `NSLocationWhenInUseUsageDescription`
+* iOS deployment target is 14.0, which is Mapbox v3's minimum.
+* There is no area/sector table. The picker's "cities" are derived from the real `branches` rows, and "areas" are the customer's own saved addresses plus free text — do not invent localities or delivery-eligibility rules.
 * Branch coordinates live in nullable `public.branches.latitude` / `.longitude` (added by migration `branches_add_coordinates`).
 * Mansehra's values are city-centre placeholders, not the real shop.
 * Do not use `OrdersRepository.bundledBranches` for anything that reaches the database — those IDs are not real UUIDs and would fail the `orders.branch_id` foreign key.
@@ -222,7 +239,6 @@ Use the full suite only when the change warrants it or the user explicitly reque
 
 * Do not use fake/fallback branch UUIDs for database orders.
 * Mansehra coordinates are placeholders.
-* Nominatim User-Agent email must be replaced before release.
 * Do not block checkout because location fails.
 * Do not install a fictional `safepay_flutter` package.
 * Do not run unnecessary full-suite validation after small changes.

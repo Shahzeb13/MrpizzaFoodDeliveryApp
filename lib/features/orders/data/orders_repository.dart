@@ -1,4 +1,6 @@
-﻿import '../../../core/network/supabase_client.dart';
+﻿import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/network/supabase_client.dart';
 import '../models/branch.dart';
 import '../models/order.dart';
 
@@ -24,9 +26,17 @@ class BranchCatalog {
 }
 
 class OrdersRepository {
+  /// Resolved lazily, mirroring `RiderRepository`: a test can construct this
+  /// without the global Supabase client having been initialised.
+  final SupabaseClient? _injectedClient;
+
+  OrdersRepository({SupabaseClient? client}) : _injectedClient = client;
+
+  SupabaseClient get client => _injectedClient ?? supabase;
+
   Future<BranchCatalog> fetchBranches() async {
     try {
-      final res = await supabase.from('branches').select();
+      final res = await client.from('branches').select();
       return buildBranchCatalogFromRows(
         (res as List).cast<Map<String, dynamic>>(),
       );
@@ -63,6 +73,23 @@ class OrdersRepository {
     return BranchCatalog(branches: branches, usedFallbackData: false);
   }
 
+  /// The delivery fee charged by [branchId], or null when that branch has no
+  /// settings row yet.
+  ///
+  /// Read per branch because the fee is a per-branch decision. A single-row
+  /// read would be wrong the moment a second branch exists, and `.limit(1)`
+  /// would silently return whichever branch happened to be first.
+  Future<double?> fetchBranchDeliveryFee(String branchId) async {
+    final row = await client
+        .from('store_settings')
+        .select('delivery_fee')
+        .eq('branch_id', branchId)
+        .maybeSingle();
+
+    final fee = row?['delivery_fee'];
+    return fee is num ? fee.toDouble() : null;
+  }
+
   /// Inserts the order header plus one `order_items` row per cart line, and
   /// returns the new order's id.
   ///
@@ -70,7 +97,7 @@ class OrdersRepository {
   /// exists — `redeem_voucher` reads the subtotal and menu items back off the
   /// order rows instead of trusting the cart the customer was shown.
   Future<String> placeOrder(Order order) async {
-    final orderRes = await supabase
+    final orderRes = await client
         .from('orders')
         .insert(order.toInsertMap())
         .select('id')
@@ -78,7 +105,7 @@ class OrdersRepository {
     final orderId = orderRes['id'] as String;
 
     if (order.items.isNotEmpty) {
-      await supabase
+      await client
           .from('order_items')
           .insert(order.items.map((item) => item.toInsertMap(orderId)).toList());
     }

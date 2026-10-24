@@ -63,17 +63,19 @@ Future<void> _settle(WidgetTester tester) async {
 Widget? _currentApp;
 
 void main() {
-  testWidgets('a rider sees deliveries, earnings and support', (tester) async {
+  testWidgets('a rider sees deliveries and support', (tester) async {
     _currentApp = _app(UserRole.rider);
     await _settle(tester);
 
     expect(find.text('My Deliveries'), findsOneWidget);
-    expect(find.text('My Earnings'), findsOneWidget);
     expect(find.text('Support Center'), findsOneWidget);
     expect(find.text('Loyalty Points'), findsNothing);
     expect(find.text('My Addresses'), findsNothing);
     expect(find.text('My Favourites'), findsNothing);
     expect(find.text('Req Account Deletion'), findsNothing);
+    // Removed from the rider drawer on purpose — it duplicated a navbar button
+    // that is also gone, so the rider has no route to earnings at all now.
+    expect(find.text('My Earnings'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mrpizza/core/theme/app_theme.dart';
 import 'package:mrpizza/features/rider/data/rider_repository.dart';
-import 'package:mrpizza/features/rider/models/rider_availability.dart';
 import 'package:mrpizza/features/rider/models/rider_delivery.dart';
 import 'package:mrpizza/features/rider/screens/rider_screen.dart';
 
@@ -18,18 +17,14 @@ class _FakeRiderRepository extends RiderRepository {
   Future<RiderDetails?> fetchRiderDetails() async => details;
 
   @override
-  Stream<List<RiderDelivery>> streamDeliveries() =>
+  Stream<List<RiderDelivery>> streamDeliveries({
+    Duration safetyNetPollInterval = riderSafetyNetPollInterval,
+  }) =>
       Stream<List<RiderDelivery>>.value(deliveries);
 
   @override
   Future<List<RiderDelivery>> fetchDeliveries() async => deliveries;
 
-  @override
-  Future<double> fetchPayoutRate() async => 250;
-
-  @override
-  Future<void> setAvailability(String status) async =>
-      called.add('availability:$status');
   @override
   Future<void> claimOffer(String id) async => called.add('claim');
   @override
@@ -40,12 +35,11 @@ class _FakeRiderRepository extends RiderRepository {
   Future<void> completeDelivery(String id) async => called.add('complete');
 }
 
-RiderDetails _details(RiderAvailability availability) => RiderDetails(
-      branchId: 'b1',
-      availability: availability,
-      branchName: 'Abbottabad',
-      branchAddress: 'Niazi Road',
-    );
+const _details = RiderDetails(
+  branchId: 'b1',
+  branchName: 'Abbottabad',
+  branchAddress: 'Niazi Road',
+);
 
 RiderDelivery _delivery({
   String status = 'accepted',
@@ -98,8 +92,7 @@ void main() {
 
   testWidgets('an available rider with no work sees the empty state',
       (tester) async {
-    await tester.pumpWidget(
-        _app(_FakeRiderRepository(details: _details(RiderAvailability.available))));
+    await tester.pumpWidget(_app(_FakeRiderRepository(details: _details)));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No deliveries waiting'), findsOneWidget);
@@ -108,7 +101,7 @@ void main() {
 
   testWidgets('a pending offer shows accept and decline', (tester) async {
     await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details(RiderAvailability.available),
+      details: _details,
       deliveries: [_delivery(status: 'assigned')],
     )));
     await tester.pumpAndSettle();
@@ -121,7 +114,7 @@ void main() {
   testWidgets('an accepted job shows the customer, address and pickup button',
       (tester) async {
     await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details(RiderAvailability.onDelivery),
+      details: _details,
       deliveries: [_delivery(status: 'accepted')],
     )));
     await tester.pumpAndSettle();
@@ -136,7 +129,7 @@ void main() {
 
   testWidgets('a picked up job offers completion, not pickup', (tester) async {
     await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details(RiderAvailability.onDelivery),
+      details: _details,
       deliveries: [_delivery(status: 'picked_up')],
     )));
     await tester.pumpAndSettle();
@@ -149,7 +142,7 @@ void main() {
   testWidgets('an old order with no snapshot says so instead of showing blanks',
       (tester) async {
     await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details(RiderAvailability.onDelivery),
+      details: _details,
       deliveries: [
         _delivery(
           status: 'accepted',
@@ -169,38 +162,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('today shows the completed count and the configured payout',
+  testWidgets('the dashboard shows the completed count and no money figure',
       (tester) async {
     await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details(RiderAvailability.available),
+      details: _details,
       deliveries: [
-        _delivery(status: 'delivered', id: 'd1', deliveredAt: '2026-09-28T12:00:00Z')
+        _delivery(
+            status: 'delivered', id: 'd1', deliveredAt: '2026-09-28T12:00:00Z')
       ],
     )));
     await tester.pumpAndSettle();
 
-    expect(find.text('Rs. 250'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    // Riders are paid a monthly salary by the branch, so the app must not
+    // invent a per-delivery figure they were never shown.
+    expect(find.textContaining('Earnings'), findsNothing);
+    expect(find.textContaining('payout'), findsNothing);
+    expect(find.textContaining('Rs.'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('going offline is offered to an available rider', (tester) async {
-    final repository = _FakeRiderRepository(
-      details: _details(RiderAvailability.available),
-    );
-    await tester.pumpWidget(_app(repository));
+  testWidgets('a recent delivery opens its order details when tapped',
+      (tester) async {
+    await tester.pumpWidget(_app(_FakeRiderRepository(
+      details: _details,
+      deliveries: [
+        _delivery(
+            status: 'delivered', id: 'd1', deliveredAt: '2026-09-28T12:00:00Z')
+      ],
+    )));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Go Offline'));
+    expect(find.text('Mandian, Abbottabad'), findsNothing);
+
+    await tester.tap(find.text('#MP-84910'));
     await tester.pumpAndSettle();
 
-    expect(repository.called, contains('availability:offline'));
+    expect(find.text('Mandian, Abbottabad'), findsOneWidget);
+    expect(find.text('2x Zinger, 1x Coke'), findsOneWidget);
+    expect(find.text('Collect from Abbottabad'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('no availability toggle is offered to the rider', (tester) async {
+    await tester.pumpWidget(_app(_FakeRiderRepository(details: _details)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Go Online'), findsNothing);
+    expect(find.text('Go Offline'), findsNothing);
+    expect(find.textContaining('You are online'), findsNothing);
+    expect(find.textContaining('You are offline'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a failed load offers a retry instead of a blank screen',
       (tester) async {
     final container = ProviderContainer(
       overrides: [
-        riderRepositoryProvider.overrideWith((ref) => _ThrowingRiderRepository()),
+        riderRepositoryProvider
+            .overrideWith((ref) => _ThrowingRiderRepository()),
       ],
     );
     addTearDown(container.dispose);

@@ -7,6 +7,9 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
 import '../features/auth/providers/auth_provider.dart';
+import '../features/loyalty/providers/loyalty_provider.dart';
+import '../features/loyalty/widgets/spend_points_control.dart';
+import '../features/menu/providers/menu_provider.dart';
 import '../features/profile/providers/profile_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
@@ -49,6 +52,18 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     // before Riverpod assigns `ref`.
     final isRider = ref.watch(roleProvider).valueOrNull == UserRole.rider;
 
+    // Null while the balance is loading, and while signed out. The loyalty tile
+    // is customer-only, so only that branch reads it.
+    final loyalty =
+        ref.watch(loyaltyBalanceProvider).valueOrNull;
+    final points = loyalty?.isSignedIn == true ? loyalty!.balance : null;
+
+    // Null while the saved dishes are loading, and while signed out — the
+    // favourites tile is customer-only, so only that branch reads it.
+    final savedCount =
+        ref.watch(favoritesProvider).valueOrNull?.length;
+    final favorites = isRider ? null : savedCount;
+
     return Drawer(
       backgroundColor: AppColors.surface,
       width: MediaQuery.of(context).size.width * 0.80,
@@ -68,7 +83,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const MrEyebrow(text: 'Delivering to'),
+                  MrEyebrow(text: isRider ? 'Delivering as' : 'Delivering to'),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -159,12 +174,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     _buildDrawerTile(
                       icon: Icons.delivery_dining_rounded,
                       title: 'My Deliveries',
-                      onTap: () => _push(riderLandingLocation),
-                    ),
-                    _buildDrawerTile(
-                      icon: Icons.payments_rounded,
-                      title: 'My Earnings',
-                      onTap: () => _push(riderEarningsLocation),
+                      onTap: () => _push(riderHistoryLocation),
                     ),
                     _buildDrawerTile(
                       icon: Icons.headset_mic_rounded,
@@ -175,7 +185,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     _buildDrawerTile(
                       icon: Icons.stars_rounded,
                       title: 'Loyalty Points',
-                      trailing: _buildBadge('120 Points'),
+                      // Was a literal "120 Points" on every install, for every
+                      // customer, whether they had any points at all. Now the
+                      // ledger balance — and no badge at all until the read
+                      // lands, so the drawer never shows a figure it has not
+                      // actually got.
+                      trailing: points != null
+                          ? _buildBadge('${formatPoints(points)} Points')
+                          : null,
                       onTap: () => _push('/loyalty'),
                     ),
                     _buildDrawerTile(
@@ -191,6 +208,14 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     _buildDrawerTile(
                       icon: Icons.favorite_rounded,
                       title: 'My Favourites',
+                      // Withheld until the read lands, exactly like the points
+                      // badge above. A drawer must never show a count it has
+                      // not actually got, so an unread list draws no badge
+                      // rather than a zero that would also be indistinguishable
+                      // from "saved nothing".
+                      trailing: favorites != null && favorites > 0
+                          ? _buildBadge('$favorites')
+                          : null,
                       onTap: () => _push('/favorites'),
                     ),
                     _buildDrawerTile(
@@ -206,12 +231,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                     child: Divider(height: 1, color: AppColors.border),
                   ),
 
-                  if (!isRider)
-                    _buildDrawerTile(
-                      icon: Icons.person_remove_rounded,
-                      title: 'Req Account Deletion',
-                      onTap: () => _push('/delete-account'),
-                    ),
                   _buildDrawerTile(
                     icon: Icons.logout_rounded,
                     title: 'Logout',
@@ -231,16 +250,21 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
                   const SizedBox(height: 16),
 
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildSocialButton(Icons.facebook, Colors.white),
-                      const SizedBox(width: 14),
-                      _buildSocialButton(
-                          Icons.camera_alt_outlined, Colors.white),
-                      const SizedBox(width: 14),
-                      _buildSocialButton(
-                          Icons.video_library_outlined, Colors.white),
+                      // Explicitly white. Without a colour this inherits the
+                      // theme's icon colour, which is the same value as the
+                      // circle behind it (#241A12) — the mark vanished.
+                      _SocialButton(
+                          child: Icon(Icons.facebook,
+                              size: 17, color: Colors.white)),
+                      SizedBox(width: 14),
+                      _SocialButton(
+                          child: _SocialGlyph(_SocialNetwork.instagram)),
+                      SizedBox(width: 14),
+                      _SocialButton(
+                          child: _SocialGlyph(_SocialNetwork.twitter)),
                     ],
                   ),
 
@@ -348,11 +372,25 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           fontWeight: FontWeight.w800,
           color: Color(0xFF9A6B1F),
         ),
-      ),
+),
     );
   }
+}
 
-  Widget _buildSocialButton(IconData icon, Color color) {
+/// The social marks in the drawer footer.
+///
+/// The two that were here before were generic stand-ins — a camera and a video
+/// library — sitting next to a real Facebook mark, so the row read as three
+/// unrelated buttons rather than three networks. Material has no brand icons for
+/// Instagram or X, and adding an icon-font package for two glyphs is not worth a
+/// dependency, so they are drawn.
+class _SocialButton extends StatelessWidget {
+  const _SocialButton({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: 38,
       height: 38,
@@ -367,7 +405,83 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           ),
         ],
       ),
-      child: Icon(icon, size: 17, color: color),
+      child: Center(child: child),
     );
   }
+}
+
+enum _SocialNetwork { instagram, twitter }
+
+class _SocialGlyph extends StatelessWidget {
+  const _SocialGlyph(this.network);
+
+  final _SocialNetwork network;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(17, 17),
+      painter: _SocialGlyphPainter(network),
+    );
+  }
+}
+
+class _SocialGlyphPainter extends CustomPainter {
+  _SocialGlyphPainter(this.network);
+
+  final _SocialNetwork network;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.11
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    switch (network) {
+      case _SocialNetwork.instagram:
+        // Rounded square, lens, and the dot in the corner.
+        final frame = Rect.fromLTWH(
+          size.width * 0.13,
+          size.height * 0.13,
+          size.width * 0.74,
+          size.height * 0.74,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            frame,
+            Radius.circular(size.width * 0.24),
+          ),
+          stroke,
+        );
+        canvas.drawCircle(
+          Offset(size.width * 0.5, size.height * 0.5),
+          size.width * 0.19,
+          stroke,
+        );
+        canvas.drawCircle(
+          Offset(size.width * 0.69, size.height * 0.31),
+          size.width * 0.055,
+          Paint()..color = Colors.white,
+        );
+      case _SocialNetwork.twitter:
+        // Two strokes crossing corner to corner.
+        canvas.drawLine(
+          Offset(size.width * 0.22, size.height * 0.24),
+          Offset(size.width * 0.78, size.height * 0.76),
+          stroke,
+        );
+        canvas.drawLine(
+          Offset(size.width * 0.78, size.height * 0.24),
+          Offset(size.width * 0.22, size.height * 0.76),
+          stroke,
+        );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SocialGlyphPainter oldDelegate) =>
+      oldDelegate.network != network;
 }

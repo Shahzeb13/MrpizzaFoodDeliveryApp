@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mrpizza/core/providers/location_provider.dart';
@@ -46,7 +47,8 @@ void main() {
     return container;
   }
 
-  testWidgets('offers the addresses the customer actually saved', (tester) async {
+  testWidgets('offers the addresses the customer actually saved',
+      (tester) async {
     await pumpDialog(
       tester,
       savedAddresses: const [
@@ -59,7 +61,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.tap(find.byKey(const Key(SavedAddressPickerField.fieldKey)));
     await tester.pumpAndSettle();
 
     // Two, not one: the dialog now opens with the default already preselected,
@@ -99,7 +101,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.tap(find.byKey(const Key(SavedAddressPickerField.fieldKey)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('House 12, Street 4, Abbottabad').last);
     await tester.pumpAndSettle();
@@ -158,7 +160,9 @@ void main() {
     expect(deviceSource.settingsOpened, isTrue);
   });
 
-  testWidgets('handles duplicate saved addresses gracefully without throwing dropdown assertion', (tester) async {
+  testWidgets(
+      'handles duplicate saved addresses gracefully without throwing dropdown assertion',
+      (tester) async {
     await pumpDialog(
       tester,
       savedAddresses: const [
@@ -177,7 +181,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.tap(find.byKey(const Key(SavedAddressPickerField.fieldKey)));
     await tester.pumpAndSettle();
 
     // One preselected in the button, one in the opened menu — and NOT three.
@@ -187,7 +191,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('rebuilding dialog after selecting saved address does not crash dropdown', (tester) async {
+  testWidgets(
+      'rebuilding dialog after selecting saved address does not crash dropdown',
+      (tester) async {
     await pumpDialog(
       tester,
       savedAddresses: const [
@@ -200,7 +206,7 @@ void main() {
       ],
     );
 
-    await tester.tap(find.byType(DropdownButtonFormField<UserAddress>));
+    await tester.tap(find.byKey(const Key(SavedAddressPickerField.fieldKey)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('House 12, Street 4, Abbottabad').last);
     await tester.pumpAndSettle();
@@ -210,13 +216,230 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('small screens', () {
+    // The reported bug: a long address was clipped because the dialog had less
+    // room than the text needed. Small viewports are where that shows up first,
+    // so the address is re-checked at a phone size nothing larger than a
+    // budget device would give it.
+    const longAddress =
+        'House 12B, Street 4, Near Green Valley Colony, Abbottabad Cantonment, '
+        'Khyber Pakhtunkhwa';
+
+    Future<void> pumpOnSmallScreen(
+      WidgetTester tester, {
+      Size size = const Size(320, 480),
+    }) async {
+      tester.view
+        ..physicalSize = size
+        ..devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await pumpDialog(
+        tester,
+        savedAddresses: const [
+          UserAddress(
+            id: 'addr-1',
+            userId: 'user-1',
+            label: 'Home',
+            addressLine: longAddress,
+            isDefault: true,
+          ),
+        ],
+      );
+    }
+
+    testWidgets('renders a long address without overflowing', (tester) async {
+      await pumpOnSmallScreen(tester);
+
+      expect(find.text(longAddress), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('every action stays reachable by scrolling', (tester) async {
+      await pumpOnSmallScreen(tester);
+
+      // The confirm button is the last thing in the dialog, so on a 480pt-tall
+      // screen it can start below the fold. It must still be scrollable to.
+      final scrollable = find.byType(Scrollable);
+      expect(scrollable, findsWidgets);
+
+      await tester.scrollUntilVisible(
+        find.text('Confirm Location'),
+        120,
+        scrollable: scrollable.first,
+      );
+      expect(find.text('Confirm Location'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('the saved address is not cut off vertically', () {
+    // The reported bug: the address in the dialog read as a single sliced-off
+    // line. The field was a `DropdownButtonFormField`, whose collapsed button
+    // hands the address a tight 24px — exactly one line at this font — no matter
+    // how many lines the address actually needs. Anything wrapping to two lines
+    // had its lower half chopped off, so the customer could not read the
+    // address they were about to confirm.
+    //
+    // This measures the rendered paragraph against the height the text actually
+    // asked for, which is what "clipped" means in layout terms.
+
+    const wrappingAddress =
+        'Trinl one hotel near comsats, Mansehra Road, Abbottabad';
+
+    Future<void> pumpAddress(WidgetTester tester) async {
+      tester.view
+        ..physicalSize = const Size(720, 1600)
+        ..devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+
+      deviceSource = FakeDeviceLocationSource(
+        permission: LocationPermissionOutcome.granted,
+        fix: fix,
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          currentUserIdProvider.overrideWithValue('user-1'),
+          addressesFutureProvider.overrideWith(
+            (ref) async => const [
+              UserAddress(
+                id: 'addr-1',
+                userId: 'user-1',
+                label: 'Home',
+                addressLine: wrappingAddress,
+                isDefault: true,
+              ),
+            ],
+          ),
+          locationRepositoryProvider.overrideWithValue(
+            LocationRepository(
+              deviceSource: deviceSource,
+              addressLookup: FakeAddressTextLookup(result: 'Abbottabad'),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: LocationSelectionDialog()),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    /// The height the text needs to draw every line, versus what it was given.
+    ///
+    /// The painter is laid out with the same max lines and the same width the
+    /// real paragraph received, so the two heights are directly comparable: when
+    /// the widget is clipped the paragraph is shorter than the painter needs.
+    void expectFullyVisible(Finder finder) {
+      final element = finder.evaluate().first;
+      final paragraph = element.renderObject! as RenderParagraph;
+      final widget = element.widget as Text;
+      final style = DefaultTextStyle.of(element).style.merge(widget.style);
+
+      final painter = TextPainter(
+        text: TextSpan(text: wrappingAddress, style: style),
+        textDirection: TextDirection.ltr,
+        maxLines: widget.maxLines,
+        strutStyle: StrutStyle.fromTextStyle(style, forceStrutHeight: true),
+      )..layout(maxWidth: paragraph.constraints.maxWidth);
+
+      expect(
+        paragraph.size.height,
+        greaterThanOrEqualTo(painter.height),
+        reason: 'the address needs ${painter.height}px to draw all '
+            '${painter.computeLineMetrics().length} lines but was only given '
+            '${paragraph.size.height}px, so the bottom of the text is being '
+            'sliced off',
+      );
+    }
+
+    testWidgets('the preselected address in the field is not sliced',
+        (tester) async {
+      await pumpAddress(tester);
+
+      expect(find.text(wrappingAddress), findsOneWidget);
+      expectFullyVisible(find.text(wrappingAddress));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('every address in the list is not sliced', (tester) async {
+      await pumpAddress(tester);
+
+      await tester.tap(find.byKey(const Key(SavedAddressPickerField.fieldKey)));
+      await tester.pumpAndSettle();
+
+      // Two: the field behind the sheet still shows the same address, and the
+      // sheet's row is the one on top.
+      expect(find.text(wrappingAddress), findsNWidgets(2));
+      expectFullyVisible(find.text(wrappingAddress).last);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('still works at a large text scale', (tester) async {
+      tester.view
+        ..physicalSize = const Size(720, 1600)
+        ..devicePixelRatio = 2.0;
+      addTearDown(tester.view.reset);
+
+      final container = ProviderContainer(
+        overrides: [
+          currentUserIdProvider.overrideWithValue('user-1'),
+          addressesFutureProvider.overrideWith(
+            (ref) async => const [
+              UserAddress(
+                id: 'addr-1',
+                userId: 'user-1',
+                label: 'Home',
+                addressLine: wrappingAddress,
+                isDefault: true,
+              ),
+            ],
+          ),
+          locationRepositoryProvider.overrideWithValue(
+            LocationRepository(
+              deviceSource: FakeDeviceLocationSource(
+                permission: LocationPermissionOutcome.granted,
+                fix: fix,
+              ),
+              addressLookup: FakeAddressTextLookup(result: 'Abbottabad'),
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+            home: const LocationSelectionDialog(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expectFullyVisible(find.text(wrappingAddress));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('confirming does not require picking anything first', () {
     // The regression this whole group is about. The dialog opened with nothing
     // selected and `_select` returned early when both the text field and the
     // dropdown were empty — so "Confirm Location" was a dead button and the only
     // way through was opening the dropdown and choosing something on every
     // visit, including the ones where the customer had already marked a default.
-    UserAddress home({required String id, required String line, bool isDefault = false}) {
+    UserAddress home(
+        {required String id, required String line, bool isDefault = false}) {
       return UserAddress(
         id: id,
         userId: 'user-1',

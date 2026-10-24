@@ -2,97 +2,102 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/widgets.dart';
-import '../logic/delivery_actions.dart';
 import '../providers/rider_providers.dart';
+import '../widgets/rider_delivery_history_card.dart';
 
 /// Every delivery this rider has finished, newest first.
+///
+/// The list arrives one page at a time so a rider with a long history does not
+/// wait for, or hold, all of it at once. Tapping a row opens its details.
 class RiderHistoryScreen extends ConsumerWidget {
   const RiderHistoryScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final deliveriesAsync = ref.watch(riderDeliveriesProvider);
+    final historyAsync = ref.watch(riderHistoryControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Deliveries')),
-      body: deliveriesAsync.when(
+      body: historyAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => _HistoryMessage(
           message: 'Could not load your deliveries.',
-          onRetry: () => ref.invalidate(riderDeliveriesProvider),
+          onRetry: () => ref.invalidate(riderHistoryControllerProvider),
         ),
-        data: (deliveries) {
-          final history = deliveredHistoryFor(deliveries);
-          if (history.isEmpty) {
+        data: (history) {
+          if (history.deliveries.isEmpty) {
             return const _HistoryMessage(
               message: 'No completed deliveries yet',
               detail: 'Orders you finish will be listed here.',
             );
           }
           return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(riderDeliveriesProvider);
-              await ref.read(riderDeliveriesProvider.future);
-            },
+            onRefresh: () =>
+                ref.read(riderHistoryControllerProvider.notifier).refresh(),
             child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-              itemCount: history.length,
+              itemCount: history.deliveries.length + 1,
               separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
-                final delivery = history[index];
-                return MrCard(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  child: Row(
-                    children: [
-                      MrIconWell(
-                        icon: delivery.assignmentStatus == 'delivered'
-                            ? Icons.check_rounded
-                            : Icons.close_rounded,
-                        color: delivery.assignmentStatus == 'delivered'
-                            ? AppColors.success
-                            : AppColors.textSecondary,
-                        background: delivery.assignmentStatus == 'delivered'
-                            ? AppColors.primaryTint
-                            : AppColors.sand,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(delivery.billNumber,
-                                style: Theme.of(context).textTheme.titleSmall),
-                            const SizedBox(height: 2),
-                            Text(
-                              delivery.customerName.isEmpty
-                                  ? delivery.itemSummary
-                                  : delivery.customerName,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        delivery.assignmentStatus,
-                        style: TextStyle(
-                          color: delivery.assignmentStatus == 'delivered'
-                              ? AppColors.success
-                              : AppColors.textSecondary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+                if (index == history.deliveries.length) {
+                  return _HistoryFooter(state: history);
+                }
+                return RiderDeliveryHistoryCard(
+                    delivery: history.deliveries[index]);
               },
             ),
           );
         },
       ),
     );
+  }
+}
+
+/// The end of the list, or the button that asks for the next page.
+class _HistoryFooter extends ConsumerWidget {
+  const _HistoryFooter({required this.state});
+
+  final RiderHistoryState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!state.hasMore) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 4),
+        child: Center(
+          child: Text(
+            'That is every delivery.',
+            style: TextStyle(fontSize: 12, color: AppColors.textLight),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: OutlinedButton(
+        onPressed: state.isLoadingMore ? null : () => _loadMore(context, ref),
+        child: state.isLoadingMore
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Load more'),
+      ),
+    );
+  }
+
+  Future<void> _loadMore(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(riderHistoryControllerProvider.notifier).loadMore();
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load more deliveries.')),
+      );
+    }
   }
 }
 

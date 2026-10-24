@@ -14,9 +14,13 @@ enum OrderType {
 
 /// Client-side order totals. Tax + delivery are computed here so the
 /// summary shown in the UI always matches what gets inserted into `orders`.
+///
+/// The delivery fee is passed in rather than hardcoded: it is per-branch, set
+/// by each branch manager in `store_settings`, and the two branches do not
+/// charge the same. [branchDeliveryFee] must come from the branch that will
+/// fulfil this order, not from a default.
 class OrderTotals {
   static const double taxRate = 0.08;
-  static const double deliveryCharge = 150.0;
 
   final double subtotal;
   final double tax;
@@ -25,8 +29,10 @@ class OrderTotals {
   OrderTotals({
     required this.subtotal,
     required OrderType orderType,
+    required double branchDeliveryFee,
   })  : tax = subtotal * taxRate,
-        deliveryFee = orderType == OrderType.pickup ? 0.0 : deliveryCharge;
+        deliveryFee =
+            orderType == OrderType.pickup ? 0.0 : branchDeliveryFee;
 
   double get total => subtotal + tax + deliveryFee;
 }
@@ -60,6 +66,15 @@ class Order {
   final String? addressId;
   final OrderType orderType;
   final String status;
+
+  /// 'cod' or 'online' — how this order is being paid.
+  ///
+  /// Written on the order rather than inferred, because a cash order and an
+  /// abandoned online payment both sit at payment_status = 'pending' and only
+  /// this column tells them apart. Null is accepted by the database but is not
+  /// a real option: every order placed by this app has chosen a method by the
+  /// time its row is written.
+  final String? paymentMethod;
   final OrderTotals totals;
   final List<OrderItem> items;
 
@@ -82,6 +97,7 @@ class Order {
     required this.totals,
     required this.items,
     this.status = 'confirmed',
+    this.paymentMethod,
     this.customerName = '',
     this.customerPhone = '',
     this.deliveryAddress = '',
@@ -102,6 +118,7 @@ class Order {
       'address_id': addressId,
       'order_type': orderType.dbValue,
       'status': status,
+      if (paymentMethod != null) 'payment_method': paymentMethod,
       'subtotal': totals.subtotal,
       'tax': totals.tax,
       'delivery_charges': totals.deliveryFee,

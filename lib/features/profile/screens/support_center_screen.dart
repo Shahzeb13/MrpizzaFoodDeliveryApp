@@ -1,45 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
+import '../models/support_document.dart';
 
-class SupportCenterScreen extends StatefulWidget {
+/// Contact options plus the policies and FAQs the business publishes.
+///
+/// The policy pages are not written out here. They are read from the website in
+/// a WebView, so the customer always sees the currently published terms and the
+/// shop can change a refund rule without an app release. Nothing on this screen
+/// restates a rule in its own words.
+class SupportCenterScreen extends StatelessWidget {
   const SupportCenterScreen({super.key});
-
-  @override
-  State<SupportCenterScreen> createState() => _SupportCenterScreenState();
-}
-
-class _SupportCenterScreenState extends State<SupportCenterScreen> {
-  final List<Map<String, String>> faqs = [
-    {
-      'question': 'How long does pizza delivery take?',
-      'answer':
-          'We deliver hot & fresh pizza within 30 to 45 minutes of order placement.',
-    },
-    {
-      'question': 'What are the delivery charges?',
-      'answer':
-          'Free delivery on orders above Rs. 1000! Standard delivery charge is Rs. 99.',
-    },
-    {
-      'question': 'Can I track my order live?',
-      'answer':
-          'Yes! You can track your order status in real-time under "My Orders" -> "Track Order".',
-    },
-    {
-      'question': 'What payment methods are supported?',
-      'answer':
-          'We support Cash on Delivery (COD), Credit/Debit Card, and Mr. Pizza Wallet.',
-    },
-  ];
-
-  final messageController = TextEditingController();
-
-  @override
-  void dispose() {
-    messageController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +36,7 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
               children: [
                 Expanded(
                   child: _buildContactCard(
+                    context,
                     icon: Icons.phone_in_talk_rounded,
                     title: 'Call Us',
                     subtitle: '+92 331 6290108',
@@ -79,6 +53,7 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildContactCard(
+                    context,
                     icon: Icons.chat_rounded,
                     title: 'WhatsApp Chat',
                     subtitle: '24/7 Available',
@@ -97,81 +72,40 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
             const SizedBox(height: 26),
 
             const MrSectionTitle(
-              title: 'Frequently Asked Questions',
-              eyebrow: 'Help',
+              title: 'Policies & Information',
+              eyebrow: 'Legal',
             ),
             const SizedBox(height: 14),
 
-            ...faqs.map((faq) => MrCard(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: EdgeInsets.zero,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Theme(
-                    data: Theme.of(context).copyWith(
-                      dividerColor: Colors.transparent,
-                    ),
-                    child: ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                      title: Text(
-                        faq['question']!,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      iconColor: AppColors.primary,
-                      collapsedIconColor: AppColors.textLight,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            faq['answer']!,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )),
+            ...SupportDocument.values
+                .map((document) => _buildDocumentRow(context, document)),
+          ],
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: 26),
-
-            const MrSectionTitle(title: 'Send Us a Message'),
-            const SizedBox(height: 14),
-            MrCard(
-              padding: const EdgeInsets.all(16),
-              borderRadius: BorderRadius.circular(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: messageController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: 'Describe your query or issue...',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (messageController.text.isNotEmpty) {
-                          messageController.clear();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Support ticket submitted! We will contact you shortly.'),
-                              backgroundColor: AppColors.success,
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Submit Ticket'),
-                    ),
-                  ),
-                ],
+  Widget _buildDocumentRow(BuildContext context, SupportDocument document) {
+    return MrCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.zero,
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => context.push('/support/document/${document.slug}'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            MrIconWell(icon: _iconFor(document), size: 20),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                document.label,
+                style: Theme.of(context).textTheme.titleSmall,
               ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textLight,
             ),
           ],
         ),
@@ -179,7 +113,23 @@ class _SupportCenterScreenState extends State<SupportCenterScreen> {
     );
   }
 
-  Widget _buildContactCard({
+  IconData _iconFor(SupportDocument document) {
+    switch (document) {
+      case SupportDocument.termsAndConditions:
+        return Icons.description_outlined;
+      case SupportDocument.privacyPolicy:
+        return Icons.lock_outline_rounded;
+      case SupportDocument.returnPolicy:
+        return Icons.assignment_return_outlined;
+      case SupportDocument.refundPolicy:
+        return Icons.currency_exchange_rounded;
+      case SupportDocument.faqs:
+        return Icons.help_outline_rounded;
+    }
+  }
+
+  Widget _buildContactCard(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,

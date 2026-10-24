@@ -21,6 +21,18 @@ class _FakeOrderRepository extends OrderTrackingRepository {
   List<OrderSummary> orders;
   OrderTracking? tracking;
 
+  /// True once the app itself has deleted the order, which is what
+  /// `discard_unpaid_order` does when a customer walks away from PayFast's
+  /// page. The tracking read then comes back empty — but only on the reads that
+  /// happen AFTER the delete, because the bar was already following a real row
+  /// by then. Modelling it as "one more value, then nothing" is the shape the
+  /// repository produces and the shape the bar has to survive.
+  bool discarded = false;
+
+  /// True when the tracking stream should produce nothing at all, which is what
+  /// a dropped socket looks like from the bar's side.
+  bool silent = false;
+
   /// Channel names the bar subscribed with, so a collision with the tracking
   /// screen's channel is caught here instead of showing up as a bar that goes
   /// randomly stale.
@@ -39,12 +51,21 @@ class _FakeOrderRepository extends OrderTrackingRepository {
   Stream<OrderTracking?> watchOrderTracking(
     String orderId, {
     String channelPrefix = 'order-tracking',
+    Duration safetyNetPollInterval = orderTrackingSafetyNetPollInterval,
   }) {
     watchedPrefixes.add(channelPrefix);
+    if (silent) return const Stream<OrderTracking?>.empty();
+
     final current = tracking;
-    return current == null
-        ? Stream<OrderTracking?>.value(null)
-        : Stream<OrderTracking?>.value(current);
+    if (current == null) {
+      return Stream<OrderTracking?>.value(null);
+    }
+    if (!discarded) return Stream<OrderTracking?>.value(current);
+
+    return Stream<OrderTracking?>.multi((controller) {
+      controller.add(current);
+      controller.add(null);
+    });
   }
 }
 
@@ -513,6 +534,117 @@ void main() {
       await pumpUntilFound(tester, find.text('#ABT-024'));
 
       expect(container.read(pinnedLiveOrderIdProvider), fresh.orderId);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // The PayFast shape. Checkout has to place the order before `payfast-token`
+  // can read its total, which means the bar sees a real, fresh, unfinished row
+  // while the customer is still on the payment page. Backing out of that page
+  // discards the row. Nothing used to tell the bar, so the menu screen went on
+  // showing an order — complete with its bill number — that the database had
+  // no row for, and `bill_serial_counters` had already moved past it.
+  // -----------------------------------------------------------------------
+
+  group('an order the app throws away takes the bar with it', () {
+    /// Runs the whole delete path: the row leaves `my_orders`, the tracking read
+    /// comes back empty, and the app re-reads everything the way a realtime
+    /// DELETE would make it.
+    void discardTheOrder(
+      ProviderContainer container,
+      _FakeOrderRepository repository,
+    ) {
+      repository.orders = [];
+      repository.tracking = null;
+      repository.discarded = true;
+      container.invalidate(myOrdersProvider);
+      container.invalidate(liveOrderIdProvider);
+      container.invalidate(liveOrderTrackingProvider);
+    }
+
+    /// Fixed pumps rather than "until the text is gone". The bar also empties
+    /// while the tracking stream is merely re-loading, so waiting on the text
+    /// alone stops one frame too early and asserts against a chain that has
+    /// only just started.
+    Future<void> pumpDiscard(WidgetTester tester) async {
+      for (var frame = 0; frame < 12; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    testWidgets('the bar stops showing an order that no longer exists', (
+      tester,
+    ) async {
+      final order = buildRealOrderABT020();
+      final repository = _FakeOrderRepository(
+        orders: [buildInFlightSummary(order)],
+        tracking: order,
+      );
+      final container = await pumpBars(tester, repository);
+
+      // Exactly what happens while the customer is on PayFast's page: the row
+      // is there, so the bar adopts it and nothing about that is wrong.
+      expect(container.read(pinnedLiveOrderIdProvider), order.orderId);
+      expect(find.text('#ABT-020'), findsOneWidget);
+
+      // The customer backs out. `discard_unpaid_order` deletes the row, so
+      // `my_orders` stops listing it and the tracking read comes back empty.
+      discardTheOrder(container, repository);
+      await pumpDiscard(tester);
+
+      expect(find.text('#ABT-020'), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    testWidgets('the pin is released, so the bar is not stuck for the session',
+        (tester) async {
+      // A pin left pointing at a deleted order is worse than a stale bar: the
+      // bar hides, and then can never adopt anything again. The customer places
+      // a real order and the menu still says there is nothing — for as long as
+      // the app stays open.
+      final order = buildRealOrderABT020();
+      final repository = _FakeOrderRepository(
+        orders: [buildInFlightSummary(order)],
+        tracking: order,
+      );
+      final container = await pumpBars(tester, repository);
+
+      discardTheOrder(container, repository);
+      await pumpDiscard(tester);
+
+      expect(container.read(pinnedLiveOrderIdProvider), isNull);
+      // Closing adoption is part of it. Releasing the pin alone would let the
+      // next lookup help itself to some older unfinished order, with nothing
+      // having prompted it — the exact bug the pin exists to prevent.
+      expect(container.read(liveOrderAdoptionClosedProvider), isTrue);
+    });
+
+    testWidgets('a read that never settles never unpins a live order', (
+      tester,
+    ) async {
+      // The guard on the release above. A null in the bar can mean "the order
+      // is gone" or it can mean "nothing has been read yet", and treating the
+      // second as the first un-pins an order that is sitting in the kitchen.
+      //
+      // This is not hypothetical: adoption writes the pin in a microtask, which
+      // re-runs the lookup and restarts the tracking stream behind it. Every
+      // fresh adoption goes through a moment where the bar holds a null that
+      // means nothing at all.
+      final order = buildRealOrderABT020();
+      final repository = _FakeOrderRepository(
+        orders: [buildInFlightSummary(order)],
+        tracking: order,
+      );
+      final container = await pumpBars(tester, repository);
+      expect(container.read(pinnedLiveOrderIdProvider), order.orderId);
+
+      // Same order, still real, but the stream produces nothing at all — the
+      // state a dropped socket leaves the bar in.
+      repository.silent = true;
+      container.invalidate(liveOrderTrackingProvider);
+      await pumpDiscard(tester);
+
+      expect(container.read(pinnedLiveOrderIdProvider), order.orderId);
     });
   });
 }

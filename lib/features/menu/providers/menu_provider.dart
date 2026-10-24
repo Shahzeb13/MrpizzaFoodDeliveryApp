@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../profile/providers/profile_provider.dart';
+import '../data/favorites_repository.dart';
 import '../data/menu_catalog.dart';
 import '../data/menu_repository.dart';
 import '../models/menu_category.dart';
@@ -54,22 +56,83 @@ final filteredMenuItemsProvider = Provider<List<MenuItem>>((ref) {
       .toList();
 });
 
-// Favorite Items Provider
-class FavoritesNotifier extends StateNotifier<Set<String>> {
-  FavoritesNotifier() : super(<String>{});
+/// The `menu_items.id` values the signed-in customer has hearted, newest first.
+///
+/// These were a plain `Set<String>` in memory, which meant a customer's saved
+/// dishes vanished on restart and the next account to sign in on a shared phone
+/// was shown the previous customer's favourites. Watching [currentUserIdProvider]
+/// inside [build] is what ties the list to the account: signing out, or signing
+/// in as somebody else, re-runs the read instead of inheriting stale ids.
+class FavoritesNotifier extends AsyncNotifier<List<String>> {
+  @override
+  Future<List<String>> build() async {
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) {
+      // Signed out: there is no row to read, and no favourites surface is
+      // reachable behind the router. Returning immediately also keeps the app
+      // from waiting on a query that cannot run.
+      return const [];
+    }
+    return ref.watch(favoritesRepositoryProvider).fetchFavoriteItemIds(userId);
+  }
 
-  void toggleFavorite(String itemId) {
-    if (state.contains(itemId)) {
-      state = {...state}..remove(itemId);
-    } else {
-      state = {...state, itemId};
+  /// Saves [itemId] if it is not saved, removes it if it is.
+  ///
+  /// The heart fills immediately and the write happens behind it, because a
+  /// round trip to the database is slow enough that an instant response is the
+  /// difference between the feature feeling real and feeling broken. A failed
+  /// write puts the list back exactly as it was and rethrows, so the button can
+  /// tell the customer their tap did not stick.
+  Future<void> toggleFavorite(String itemId) async {
+    // A tap can land before the first read returns, and that read would then
+    // overwrite the choice just made. Waiting for it keeps the two in order.
+    if (state.isLoading) {
+      try {
+        await future;
+      } catch (_) {
+        // The load failed, so there is no list for it to disagree with. Carry
+        // on and let the write below decide whether the tap took.
+      }
+    }
+
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    final before = state;
+    final saved = before.valueOrNull ?? const <String>[];
+
+    state = AsyncData(
+      saved.contains(itemId)
+          ? saved.where((id) => id != itemId).toList()
+          : [itemId, ...saved],
+    );
+
+    try {
+      final repository = ref.read(favoritesRepositoryProvider);
+      if (saved.contains(itemId)) {
+        await repository.removeFavorite(userId: userId, itemId: itemId);
+      } else {
+        await repository.addFavorite(userId: userId, itemId: itemId);
+      }
+    } catch (_) {
+      state = before;
+      rethrow;
     }
   }
 }
 
-final favoritesProvider = StateNotifierProvider<FavoritesNotifier, Set<String>>((ref) {
-  return FavoritesNotifier();
-});
+final favoritesProvider =
+    AsyncNotifierProvider<FavoritesNotifier, List<String>>(
+  FavoritesNotifier.new,
+);
+
+/// Whether [itemId] is currently hearted.
+///
+/// An unread list answers false, which draws the empty heart rather than a
+/// placeholder. A heart that briefly reads as unsaved while the list loads is
+/// far less alarming than a blank circle, and the tap is recorded either way.
+bool isFavorite(AsyncValue<List<String>> favorites, String itemId) =>
+    favorites.valueOrNull?.contains(itemId) ?? false;
 
 // Cart State
 class CartState {

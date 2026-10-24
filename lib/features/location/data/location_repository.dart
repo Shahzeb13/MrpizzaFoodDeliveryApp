@@ -48,7 +48,8 @@ class LocationCaptureException implements Exception {
   /// offer a button that opens settings rather than a plain "try again".
   final bool settingsMustBeOpened;
 
-  const LocationCaptureException(this.message, {this.settingsMustBeOpened = false});
+  const LocationCaptureException(this.message,
+      {this.settingsMustBeOpened = false});
 
   @override
   String toString() => message;
@@ -101,9 +102,18 @@ class LocationRepository {
       coordinates = await deviceSource.readCurrentCoordinates();
     } on LocationCaptureException {
       rethrow;
+    } on TimeoutException {
+      // A timeout is almost always the device indoors or in a street it cannot
+      // lock onto, not a fault worth reporting verbatim. Saying "Future not
+      // completed after 0:00:15" tells the customer nothing they can act on.
+      throw const LocationCaptureException(
+        'We could not get a GPS fix here — it often needs a clear view of the '
+        'sky. You can still move the map by hand and drop the pin yourself.',
+      );
     } catch (error) {
       throw LocationCaptureException(
-        'Could not read your location: $error',
+        'We could not read your location. You can still move the map by hand '
+        'and drop the pin yourself. ($error)',
       );
     }
 
@@ -146,7 +156,27 @@ class LocationRepository {
     }
   }
 
-  Future<String> _lookupAddressTextOrEmpty(CapturedCoordinates coordinates) async {
+  /// Describes a point chosen by hand on the map, in plain address text.
+  ///
+  /// Returns null when nothing was found or the lookup failed — never throws —
+  /// because an empty field they can fill in themselves beats a failed
+  /// confirmation.
+  ///
+  /// The delivery map does not call this: it asks its geocoder once and reuses
+  /// that single answer for both the pin label and the field. This stays for
+  /// callers that only need the text, such as a GPS capture.
+  Future<String?> describeCoordinates(
+    double latitude,
+    double longitude,
+  ) async {
+    final text = await _lookupAddressTextOrEmpty(
+      CapturedCoordinates(latitude: latitude, longitude: longitude),
+    );
+    return text.isEmpty ? null : text;
+  }
+
+  Future<String> _lookupAddressTextOrEmpty(
+      CapturedCoordinates coordinates) async {
     try {
       final text = await addressLookup.lookupAddressText(coordinates);
       return text?.trim() ?? '';
@@ -159,12 +189,9 @@ class LocationRepository {
 
   /// Rejects coordinates that cannot be a real customer position. `0,0` is in
   /// the Gulf of Guinea and is what a device reports when it has no fix.
-  static bool _isPlausibleEarthCoordinate(CapturedCoordinates coordinates) {
-    bool inRange(double value, double min, double max) =>
-        value >= min && value <= max && !value.isNaN;
-
-    return inRange(coordinates.latitude, -90, 90) &&
-        inRange(coordinates.longitude, -180, 180) &&
-        !(coordinates.latitude == 0 && coordinates.longitude == 0);
-  }
+  static bool _isPlausibleEarthCoordinate(CapturedCoordinates coordinates) =>
+      CapturedCoordinates.isPlausibleEarth(
+        coordinates.latitude,
+        coordinates.longitude,
+      );
 }

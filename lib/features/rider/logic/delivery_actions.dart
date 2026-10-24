@@ -1,7 +1,14 @@
 import '../models/rider_delivery.dart';
 
-/// The six database transitions a rider can trigger.
-enum RiderAction { accept, decline, markPickedUp, complete, fail }
+/// The database transitions a rider can trigger.
+enum RiderAction {
+  accept,
+  decline,
+  markPickedUp,
+  complete,
+  fail,
+  collectCash,
+}
 
 /// The label and action for the dashboard's one big button.
 class RiderActionButton {
@@ -26,6 +33,23 @@ RiderActionButton? primaryActionFor(RiderDelivery delivery) {
     default:
       return null;
   }
+}
+
+/// The secondary action under the primary button, or null when there is nothing
+/// extra to do.
+///
+/// Only ever "Cash Collected", and only once the job is finished: the primary
+/// button is the delivery lifecycle, and taking the money is a separate fact
+/// about the same job. Shown only for cash orders that are not settled yet,
+/// because for an online order the money is already recorded and a button to
+/// collect it would be a lie.
+RiderActionButton? secondaryActionFor(RiderDelivery delivery) {
+  if (delivery.assignmentStatus != 'delivered') return null;
+  if (delivery.paymentMethod != 'cod') return null;
+  if (delivery.paymentStatus == 'paid') return null;
+
+  return const RiderActionButton(
+      label: 'Cash Collected', action: RiderAction.collectCash);
 }
 
 /// Jobs waiting for this rider to accept or decline.
@@ -56,18 +80,6 @@ List<RiderDelivery> deliveredHistoryFor(List<RiderDelivery> deliveries) {
       return bTime.compareTo(aTime);
     });
   return history;
-}
-
-/// Payout earned, using the store's configured rate per completed delivery.
-///
-/// A rate of zero means the rate could not be read; it must never be turned
-/// into a nonzero figure by guessing.
-double earningsFor(
-  List<RiderDelivery> deliveries,
-  double payoutPerDelivery,
-) {
-  if (payoutPerDelivery <= 0) return 0;
-  return completedCountFor(deliveries) * payoutPerDelivery;
 }
 
 /// How many deliveries this rider has completed.

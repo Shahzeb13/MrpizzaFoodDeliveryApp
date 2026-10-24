@@ -4,6 +4,7 @@ import '../core/providers/location_provider.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
+import '../features/location/screens/map_location_picker_sheet.dart';
 import '../features/menu/data/menu_repository.dart';
 import '../features/menu/models/menu_category.dart';
 import '../features/menu/models/menu_item.dart';
@@ -221,6 +222,69 @@ class _AddButton extends StatelessWidget {
   }
 }
 
+/// Heart toggle that overlaps the top-left corner of a dish image.
+///
+/// Deliberately its own [ConsumerWidget] that watches only [favoritesProvider].
+/// Watching it inside [PizzaCard] or [GridItemCard] instead would rebuild every
+/// dish on screen each time one heart is tapped, which on the full menu is a
+/// visible stall for a single-digit change.
+class FavoriteButton extends ConsumerWidget {
+  final MenuItem item;
+  final double size;
+
+  const FavoriteButton({
+    super.key,
+    required this.item,
+    this.size = 26,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favorites = ref.watch(favoritesProvider);
+    final isSaved = isFavorite(favorites, item.id);
+
+    return GestureDetector(
+      onTap: () async {
+        try {
+          await ref.read(favoritesProvider.notifier).toggleFavorite(item.id);
+          if (!context.mounted) return;
+          showTopCartToast(
+            context,
+            isSaved
+                ? 'Removed ${item.title} from favourites'
+                : 'Saved ${item.title} to favourites',
+          );
+        } catch (_) {
+          if (!context.mounted) return;
+          showTopCartToast(context, 'Could not update favourites.');
+        }
+      },
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          // The dish image runs underneath, so the heart carries its own
+          // backdrop rather than relying on the image being light enough.
+          color: Colors.white.withValues(alpha: 0.92),
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadowSoft,
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          color: isSaved ? AppColors.primary : AppColors.textSecondary,
+          size: size * 0.58,
+        ),
+      ),
+    );
+  }
+}
+
 /// Customer Reviews Carousel (warm editorial cards, no borders)
 class CustomerReviewsSection extends StatelessWidget {
   const CustomerReviewsSection({super.key});
@@ -421,12 +485,18 @@ class PizzaCard extends ConsumerWidget {
                             return Container(
                               color: AppColors.sand,
                               child: const Center(
-                                child: Text('🍕', style: TextStyle(fontSize: 32)),
+                                child:
+                                    Text('🍕', style: TextStyle(fontSize: 32)),
                               ),
                             );
                           },
                         ),
                       ),
+                    ),
+                    Positioned(
+                      top: -4,
+                      left: -4,
+                      child: FavoriteButton(item: item, size: 24),
                     ),
                     Positioned(
                       bottom: -2,
@@ -463,12 +533,16 @@ class CategoryHeroCard extends StatelessWidget {
   /// falls back to something honest rather than to a wrong guess.
   String get categoryTagline {
     final name = category.name.toLowerCase();
-    if (name.contains('deal') || name.contains('offer') || name.contains('free')) {
+    if (name.contains('deal') ||
+        name.contains('offer') ||
+        name.contains('free')) {
       return 'Limited-time bundles and combos';
     }
     if (name.contains('pizza')) return 'Hand-tossed, baked fresh to order';
     if (name.contains('burger')) return 'Flame-grilled & crispy delights';
-    if (name.contains('wrap') || name.contains('roll') || name.contains('shawarma')) {
+    if (name.contains('wrap') ||
+        name.contains('roll') ||
+        name.contains('shawarma')) {
       return 'Rolled fresh with signature sauces';
     }
     if (name.contains('chicken') || name.contains('wing')) {
@@ -480,10 +554,14 @@ class CategoryHeroCard extends StatelessWidget {
     if (name.contains('steak')) return 'Seared and served sizzling';
     if (name.contains('pasta')) return 'Creamy, saucy, comfort on a plate';
     if (name.contains('sandwich')) return 'Stacked fresh between soft bread';
-    if (name.contains('dessert') || name.contains('cake') || name.contains('brownie')) {
+    if (name.contains('dessert') ||
+        name.contains('cake') ||
+        name.contains('brownie')) {
       return 'Sweet treats to finish the meal';
     }
-    if (name.contains('drink') || name.contains('beverage') || name.contains('shake')) {
+    if (name.contains('drink') ||
+        name.contains('beverage') ||
+        name.contains('shake')) {
       return 'Ice-cold pours and frozen blends';
     }
     if (name.contains('side') || name.contains('starter')) {
@@ -544,8 +622,8 @@ class CategoryHeroCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.goldTint,
                       borderRadius: BorderRadius.circular(999),
@@ -653,6 +731,11 @@ class GridItemCard extends ConsumerWidget {
                       ),
                     ),
                   ),
+                ),
+                Positioned(
+                  top: -2,
+                  left: -2,
+                  child: FavoriteButton(item: item, size: 26),
                 ),
                 Positioned(
                   bottom: -2,
@@ -947,7 +1030,8 @@ class _CustomizationBottomSheetState
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: Image.network(
-                                MenuRepository.resolveImageUrl(widget.item.imageUrl),
+                                MenuRepository.resolveImageUrl(
+                                    widget.item.imageUrl),
                                 width: 72,
                                 height: 72,
                                 fit: BoxFit.cover,
@@ -981,8 +1065,8 @@ class _CustomizationBottomSheetState
                                     const SizedBox(width: 3),
                                     Text(
                                       widget.item.rating.toStringAsFixed(1),
-                                      style: theme.textTheme.labelMedium
-                                          ?.copyWith(
+                                      style:
+                                          theme.textTheme.labelMedium?.copyWith(
                                         color: AppColors.textPrimary,
                                         fontWeight: FontWeight.w800,
                                       ),
@@ -1037,71 +1121,67 @@ class _CustomizationBottomSheetState
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
-                          children: widget.item.availableToppings
-                              .map((topping) {
-                                final selected =
-                                    _selectedToppings.contains(topping);
-                                return GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      if (selected) {
-                                        _selectedToppings.remove(topping);
-                                      } else {
-                                        _selectedToppings.add(topping);
-                                      }
-                                    });
-                                  },
-                                  child: AnimatedContainer(
-                                    duration:
-                                        const Duration(milliseconds: 180),
-                                    curve: Curves.easeOut,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: selected
-                                          ? AppColors.primaryTint
-                                          : AppColors.sand,
-                                      borderRadius:
-                                          BorderRadius.circular(999),
+                          children:
+                              widget.item.availableToppings.map((topping) {
+                            final selected =
+                                _selectedToppings.contains(topping);
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedToppings.remove(topping);
+                                  } else {
+                                    _selectedToppings.add(topping);
+                                  }
+                                });
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOut,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? AppColors.primaryTint
+                                      : AppColors.sand,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      topping.icon,
+                                      style: const TextStyle(fontSize: 13),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          topping.icon,
-                                          style:
-                                              const TextStyle(fontSize: 13),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          topping.name,
-                                          style: TextStyle(
-                                            fontFamily: AppTheme.fontFamily,
-                                            fontSize: 12,
-                                            fontWeight: selected
-                                                ? FontWeight.w700
-                                                : FontWeight.w600,
-                                            color: selected
-                                                ? AppColors.primary
-                                                : AppColors.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 5),
-                                        Text(
-                                          '+${topping.price.toInt()}',
-                                          style: const TextStyle(
-                                            fontFamily: AppTheme.fontFamily,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.textLight,
-                                          ),
-                                        ),
-                                      ],
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      topping.name,
+                                      style: TextStyle(
+                                        fontFamily: AppTheme.fontFamily,
+                                        fontSize: 12,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: selected
+                                            ? AppColors.primary
+                                            : AppColors.textSecondary,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              })
-                              .toList(),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      '+${topping.price.toInt()}',
+                                      style: const TextStyle(
+                                        fontFamily: AppTheme.fontFamily,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ],
                       const SizedBox(height: 22),
@@ -1286,7 +1366,204 @@ List<UserAddress> savedAddressesForDialog({
 /// was selected.
 UserAddress? defaultSavedAddress(List<UserAddress> visible) {
   if (visible.isEmpty) return null;
-  return visible.firstWhere((address) => address.isDefault, orElse: () => visible.first);
+  return visible.firstWhere((address) => address.isDefault,
+      orElse: () => visible.first);
+}
+
+/// The saved-address choice: a field that shows the current pick and opens a
+/// list of every saved address.
+///
+/// This is deliberately *not* a `DropdownButtonFormField`. That widget pins its
+/// collapsed button to exactly one line of text: the address was handed a tight
+/// 24px height no matter how many lines `maxLines` allowed, so anything needing
+/// two lines had the second one chopped off and read as half a line of sliced
+/// glyphs. The height was never negotiated with the text, so no amount of
+/// padding or `maxLines` on the item fixed it.
+///
+/// A tappable field plus a sheet has no such ceiling — the field grows to the
+/// address it is showing and every row in the list wraps freely, so a long
+/// address is readable both when chosen and when choosing.
+class SavedAddressPickerField extends StatelessWidget {
+  const SavedAddressPickerField({
+    super.key,
+    required this.addresses,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<UserAddress> addresses;
+  final UserAddress? selected;
+  final ValueChanged<UserAddress> onSelected;
+
+  static const String fieldKey = 'saved-address-picker';
+
+  Future<void> _openAddressList(BuildContext context) async {
+    final chosen = await showModalBottomSheet<UserAddress>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (sheetContext) => _SavedAddressListSheet(
+        addresses: addresses,
+        selected: selected,
+      ),
+    );
+    if (chosen != null) onSelected(chosen);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final addressLine = selected?.addressLine;
+    final hasSelection = addressLine != null;
+
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openAddressList(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                // Three lines before it gives up. Combined with the wrapping
+                // this box is free to grow, this is the full address or as much
+                // of it as the field can usefully show.
+                child: Text(
+                  hasSelection ? addressLine : 'Saved address',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: hasSelection
+                      ? theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        )
+                      : theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textLight,
+                          fontWeight: FontWeight.w500,
+                        ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 22,
+                color: AppColors.textLight,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The list of saved addresses, shown in a sheet.
+///
+/// Each row is given the room its address actually needs, so a long address is
+/// fully readable here instead of being trimmed to fit a one-line dropdown.
+class _SavedAddressListSheet extends StatelessWidget {
+  const _SavedAddressListSheet(
+      {required this.addresses, required this.selected});
+
+  final List<UserAddress> addresses;
+  final UserAddress? selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        // The sheet never grows past the screen, however many addresses there
+        // are — it scrolls instead.
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderDeep,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+              child: Text(
+                'Choose a saved address',
+                style: theme.textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                itemCount: addresses.length,
+                separatorBuilder: (context, index) =>
+                    const Divider(height: 1, color: AppColors.border),
+                itemBuilder: (context, index) {
+                  final address = addresses[index];
+                  final isSelected = address == selected;
+                  return InkWell(
+                    onTap: () => Navigator.pop(context, address),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                      child: Row(
+                        // Top, not centre: a multi-line address should keep its
+                        // check mark beside its first line.
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              address.addressLine,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          if (isSelected) ...[
+                            const SizedBox(width: 12),
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class LocationSelectionDialog extends ConsumerStatefulWidget {
@@ -1338,7 +1615,8 @@ class _LocationSelectionDialogState
   }
 
   UserAddress? _defaultFromLoadedAddresses() {
-    final addresses = ref.read(addressesFutureProvider).value ?? const <UserAddress>[];
+    final addresses =
+        ref.read(addressesFutureProvider).value ?? const <UserAddress>[];
     if (addresses.isEmpty) return null;
     return defaultSavedAddress(
       savedAddressesForDialog(
@@ -1419,6 +1697,18 @@ class _LocationSelectionDialogState
     Navigator.pop(context);
   }
 
+  /// Opens the delivery map as a sheet over this dialog.
+  ///
+  /// The map does the saving itself, exactly as the GPS button does here, so
+  /// whichever way the customer chooses a location the app ends up in the same
+  /// state. Returning true means a location was confirmed, so this dialog has
+  /// nothing left to ask and closes.
+  Future<void> _openMapPicker() async {
+    final picked = await showMapLocationPicker(context);
+    if (!mounted) return;
+    if (picked == true) Navigator.pop(context);
+  }
+
   Future<void> _openLocationSettings() async {
     await ref.read(locationProvider.notifier).openAppSettings();
   }
@@ -1427,7 +1717,8 @@ class _LocationSelectionDialogState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = ref.watch(locationProvider);
-    final addresses = ref.watch(addressesFutureProvider).value ?? const <UserAddress>[];
+    final addresses =
+        ref.watch(addressesFutureProvider).value ?? const <UserAddress>[];
     final uniqueSavedAddresses = savedAddressesForDialog(
       addresses: addresses,
       currentAddressText: location.address,
@@ -1444,179 +1735,214 @@ class _LocationSelectionDialogState
         ? uniqueSavedAddresses.firstWhere((a) => a == _selectedSaved)
         : null;
 
+    // The dialog used to pass horizontal-only inset padding, which quietly
+    // replaced the default vertical inset with zero and left no room to scroll
+    // in. On a short screen the address text was squeezed into whatever was
+    // left after the fixed-height buttons, so it rendered as a cut-off line.
+    // The height is now measured from the actual viewport and the content
+    // scrolls inside it, so a long address wraps instead of being clipped.
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight =
+        mediaQuery.size.height - mediaQuery.padding.vertical;
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       backgroundColor: AppColors.surface,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryTint,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.location_on_rounded,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text('Set Delivery Location',
-                  style: theme.textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                'We deliver hot & fresh across Abbottabad and Mansehra.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: FilledButton.icon(
-                  onPressed: _isLocating ? null : _useCurrentLocation,
-                  icon: const Icon(Icons.my_location_rounded, size: 17),
-                  label: Text(
-                    _isLocating ? 'Locating…' : 'Use Current Location',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      constraints: BoxConstraints(
+        maxHeight: (availableHeight - 48).clamp(280.0, double.infinity),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primaryTint,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.location_on_rounded,
+                    color: AppColors.primary,
+                    size: 20,
                   ),
                 ),
-              ),
-              if (location.errorMessage != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
+                Text('Set Delivery Location',
+                    style: theme.textTheme.titleLarge),
+                const SizedBox(height: 4),
                 Text(
-                  location.errorMessage!,
-                  style: const TextStyle(
-                    color: AppColors.warning,
-                    fontSize: 12.5,
-                    height: 1.35,
+                  'We deliver hot & fresh across Abbottabad and Mansehra.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                if (location.settingsMustBeOpened)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _openLocationSettings,
-                      icon: const Icon(Icons.settings_rounded, size: 17),
-                      label: const Text('Open Settings'),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ),
-              ],
-              if (uniqueSavedAddresses.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                const Row(
-                  children: [
-                    Expanded(child: MrFadeDivider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'OR',
-                        style: TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                          color: AppColors.textLight,
-                        ),
-                      ),
-                    ),
-                    Expanded(child: MrFadeDivider()),
-                  ],
-                ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   height: 46,
-                  child: DropdownButtonFormField<UserAddress>(
-                    key: ValueKey(activeSelection?.id),
-                    initialValue: activeSelection,
-                    hint: const Text('Saved address'),
-                    isExpanded: true,
-                    borderRadius: BorderRadius.circular(18),
-                    items: uniqueSavedAddresses
-                        .map(
-                          (address) => DropdownMenuItem<UserAddress>(
-                            value: address,
-                            child: Text(
-                              address.addressLine,
-                              overflow: TextOverflow.ellipsis,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLocating || _isSaving ? null : _openMapPicker,
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text(
+                      'Pick on map',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primaryLight),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton.icon(
+                    onPressed: _isLocating ? null : _useCurrentLocation,
+                    icon: const Icon(Icons.my_location_rounded, size: 17),
+                    label: Text(
+                      _isLocating ? 'Locating…' : 'Use Current Location',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                if (location.errorMessage != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    location.errorMessage!,
+                    style: const TextStyle(
+                      color: AppColors.warning,
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                  if (location.settingsMustBeOpened)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _openLocationSettings,
+                        icon: const Icon(Icons.settings_rounded, size: 17),
+                        label: const Text('Open Settings'),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                ],
+                if (uniqueSavedAddresses.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  const Row(
+                    children: [
+                      Expanded(child: MrFadeDivider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'OR',
+                          style: TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: MrFadeDivider()),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SavedAddressPickerField(
+                    key: const Key(SavedAddressPickerField.fieldKey),
+                    addresses: uniqueSavedAddresses,
+                    selected: activeSelection,
+                    onSelected: (value) =>
+                        setState(() => _selectedSaved = value),
+                  ),
+                ],
+                // Wraps too, so a long hand-typed address is readable while it is
+                // being typed rather than scrolled horizontally out of sight.
+                TextField(
+                  controller: _addressController,
+                  minLines: 1,
+                  maxLines: 3,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    hintText: 'Enter address manually',
+                    prefixIcon: Icon(Icons.edit_location_alt_rounded, size: 19),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: (_isSaving || _isLocating) ? null : _select,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 6,
+                      shadowColor: AppColors.primary.withValues(alpha: 0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Flexible so the label gives way on a narrow screen or
+                        // at a large text scale instead of overflowing the
+                        // button it sits in.
+                        Flexible(
+                          child: Text(
+                            'Confirm Location',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
                             ),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _selectedSaved = value),
+                        ),
+                        SizedBox(width: 10),
+                        Icon(Icons.arrow_forward_rounded,
+                            size: 16, color: Colors.white),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Say plainly that confirming stores the location, so the save is
+                // not a surprise and My Addresses making sense afterwards is
+                // expected rather than mysterious.
+                const Text(
+                  'Saved to your addresses so you can pick it again at checkout.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 11.5,
+                    height: 1.3,
+                    color: AppColors.textLight,
                   ),
                 ),
               ],
-              TextField(
-                controller: _addressController,
-                decoration: const InputDecoration(
-                  hintText: 'Enter address manually',
-                  prefixIcon: Icon(Icons.edit_location_alt_rounded, size: 19),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: (_isSaving || _isLocating) ? null : _select,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 6,
-                    shadowColor: AppColors.primary.withValues(alpha: 0.4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Confirm Location',
-                        style: TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Icon(Icons.arrow_forward_rounded,
-                          size: 16, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Say plainly that confirming stores the location, so the save is
-              // not a surprise and My Addresses making sense afterwards is
-              // expected rather than mysterious.
-              const Text(
-                'Saved to your addresses so you can pick it again at checkout.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 11.5,
-                  height: 1.3,
-                  color: AppColors.textLight,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

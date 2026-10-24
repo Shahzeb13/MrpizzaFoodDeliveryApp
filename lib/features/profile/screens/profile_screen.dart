@@ -372,6 +372,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onTap: () {},
             ),
             _buildProfileTile(
+              icon: Icons.favorite_border_rounded,
+              title: 'My Favourites',
+              subtitle: 'Dishes you have saved for later',
+              onTap: () {
+                context.push('/favorites');
+              },
+            ),
+            _buildProfileTile(
               icon: Icons.support_agent_outlined,
               title: 'Mr. Pizza Customer Support',
               subtitle: '24/7 Live chat & helpline',

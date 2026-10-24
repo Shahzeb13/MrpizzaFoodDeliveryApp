@@ -29,7 +29,7 @@ class FakeDeviceLocationSource implements DeviceLocationSource {
   }
 }
 
-/// Stands in for OpenStreetMap reverse geocoding.
+/// Stands in for Mapbox reverse geocoding.
 class FakeAddressTextLookup implements AddressTextLookup {
   String? result;
   Object? error;
@@ -44,7 +44,7 @@ class FakeAddressTextLookup implements AddressTextLookup {
   }
 }
 
-/// Stands in for OpenStreetMap forward geocoding: typed address text in,
+/// Stands in for Mapbox forward geocoding: typed address text in,
 /// coordinates out, so checkout can work out the closest branch.
 class FakeForwardGeocoder implements AddressCoordinateLookup {
   CapturedCoordinates? coordinates;

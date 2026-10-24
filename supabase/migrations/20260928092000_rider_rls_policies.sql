@@ -222,3 +222,92 @@ drop policy if exists "store_settings readable when signed in" on public.store_s
 create policy "store_settings readable when signed in"
   on public.store_settings for select to authenticated
   using (true);
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Security follow-ups found while auditing the above.
+--
+-- These are not rider-panel behaviour; they are the same class of leak, and
+-- each one is exploitable with nothing but the publishable key that ships in
+-- the APK.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- ------------------------------------------------------------- profiles
+-- The existing policy is granted to PUBLIC with the qual
+--   auth.role() = 'authenticated' AND role = 'rider'
+-- so ANY signed-in customer can list every rider's name, phone and branch.
+-- Reading a rider's profile is a staff job (the panel lists riders); the
+-- customer app reaches a rider only through the SECURITY DEFINER
+-- order_tracking()/rider_deliveries() functions, which already scope the row.
+drop policy if exists "Staff can read rider profiles" on public.profiles;
+drop policy if exists "staff read rider profiles" on public.profiles;
+create policy "staff read rider profiles"
+  on public.profiles for select to authenticated
+  using (public.is_staff() and role = 'rider');
+
+-- ------------------------------------------------------ table privileges
+-- RLS plus a matching policy is the real gate, but the publishable key holds
+-- table-level grants on these tables too. Take the grants away from anon so
+-- a future policy mistake cannot reopen the hole. `authenticated` keeps its
+-- grants for the panel; the policies above decide what each role may touch.
+--
+-- branches is the one exception: the customer app reads branches before it
+-- has a session, so anon keeps SELECT and nothing else.
+revoke all on public.orders               from anon;
+revoke all on public.order_items          from anon;
+revoke all on public.order_status_history from anon;
+revoke all on public.rider_assignments    from anon;
+revoke all on public.rider_details        from anon;
+revoke all on public.transactions         from anon;
+revoke all on public.branches             from anon;
+grant select on public.branches to anon;
+
+-- ------------------------------------------------------- function grants
+-- rider_deliveries() was executable by PUBLIC. It returns nothing when
+-- auth.uid() is null, but it must not be callable without a rider session.
+revoke all on function public.rider_deliveries(integer, integer, boolean)
+  from public, anon;
+grant execute on function public.rider_deliveries(integer, integer, boolean)
+  to authenticated, service_role;
+
+-- loyalty_demo_simulation() is a SECURITY DEFINER test harness that inserts,
+-- updates and deletes rows in orders and loyalty_ledger, and even rewrites
+-- request.jwt.claims to impersonate a customer. It had no reason to be
+-- callable by a client at all.
+revoke all on function public.loyalty_demo_simulation(boolean)
+  from public, anon, authenticated;
+grant execute on function public.loyalty_demo_simulation(boolean)
+  to service_role;
+
+-- These functions all act on auth.uid() and are only reachable after checkout,
+-- which the router guards behind a session. An anon caller has no legitimate
+-- use for any of them, and validate_voucher()/redeem_voucher() accept a
+-- p_user_id that must never be supplied by an anonymous client.
+revoke all on function public.validate_voucher(text, numeric, uuid, uuid[], uuid)
+  from public, anon;
+grant execute on function public.validate_voucher(text, numeric, uuid, uuid[], uuid)
+  to authenticated, service_role;
+
+revoke all on function public.redeem_voucher(text, uuid, uuid)
+  from public, anon;
+grant execute on function public.redeem_voucher(text, uuid, uuid)
+  to authenticated, service_role;
+
+revoke all on function public.first_order_offer(numeric, uuid)
+  from public, anon;
+grant execute on function public.first_order_offer(numeric, uuid)
+  to authenticated, service_role;
+
+revoke all on function public.apply_first_order_discount(uuid)
+  from public, anon;
+grant execute on function public.apply_first_order_discount(uuid)
+  to authenticated, service_role;
+
+revoke all on function public.get_my_loyalty_balance()
+  from public, anon;
+grant execute on function public.get_my_loyalty_balance()
+  to authenticated, service_role;
+
+revoke all on function public.customer_branch_id(uuid)
+  from public, anon;
+grant execute on function public.customer_branch_id(uuid)
+  to authenticated, service_role;

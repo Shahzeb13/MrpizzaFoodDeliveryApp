@@ -588,48 +588,26 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     );
   }
 
-  /// The five real steps, lit by the stage the order is actually in.
+  /// The real steps, lit by the stage the order is actually in.
   ///
   /// The old version's second step was permanently titled "Baking in Wood-Fired
   /// Oven" and was marked done purely by which fake enum value was in memory.
   /// Both now come from `orders.status`, including the "ready for pickup" stage
   /// the branch added so a customer can see their food bagged and waiting for a
   /// rider rather than still being cooked.
+  ///
+  /// A pickup order gets a different track entirely. It never has a rider and
+  /// never travels, so its two delivery steps would be three lines of fiction on
+  /// a screen the customer is reading while standing at a counter.
   Widget _buildPipelineSection(BuildContext context, OrderTracking tracking) {
     final stage = tracking.stage;
-    final reached = pipelineProgressFor(stage);
-    final riderName = tracking.rider?.fullName;
-    final onTheWaySubtitle = riderName == null
-        ? 'A rider is bringing your order'
-        : '$riderName is bringing your order';
-
-    final steps = <_PipelineStep>[
-      const _PipelineStep(
-        title: 'Order Confirmed',
-        subtitle: 'The branch has your order',
-        icon: Icons.check_circle,
-      ),
-      const _PipelineStep(
-        title: 'Preparing Your Food',
-        subtitle: 'The kitchen is cooking your order',
-        icon: Icons.local_fire_department,
-      ),
-      const _PipelineStep(
-        title: 'Ready for Pickup',
-        subtitle: 'Your food is packed and waiting for the rider',
-        icon: Icons.takeout_dining_rounded,
-      ),
-      _PipelineStep(
-        title: 'On The Way',
-        subtitle: onTheWaySubtitle,
-        icon: Icons.delivery_dining,
-      ),
-      const _PipelineStep(
-        title: 'Delivered',
-        subtitle: 'Enjoy your Mr. Pizza order',
-        icon: Icons.home,
-      ),
-    ];
+    final steps = tracking.isPickup
+        ? _pickupPipelineSteps(tracking)
+        : _deliveryPipelineSteps(tracking);
+    final reached = pipelineProgressFor(
+      stage,
+      stepCount: tracking.pipelineLength,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -649,6 +627,77 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
         }),
       ],
     );
+  }
+
+  /// The delivery track: confirmed, cooking, bagged, on the way, delivered.
+  ///
+  /// Five steps, because a delivery genuinely has two more than a pickup does —
+  /// and every one of them names the person or the place actually involved.
+  List<_PipelineStep> _deliveryPipelineSteps(OrderTracking tracking) {
+    final riderName = tracking.rider?.fullName;
+    return [
+      const _PipelineStep(
+        title: 'Order Confirmed',
+        subtitle: 'The branch has your order',
+        icon: Icons.check_circle,
+      ),
+      const _PipelineStep(
+        title: 'Preparing Your Food',
+        subtitle: 'The kitchen is cooking your order',
+        icon: Icons.local_fire_department,
+      ),
+      const _PipelineStep(
+        title: 'Ready for Pickup',
+        subtitle: 'Your food is packed and waiting for the rider',
+        icon: Icons.takeout_dining_rounded,
+      ),
+      _PipelineStep(
+        title: 'On The Way',
+        subtitle: riderName == null
+            ? 'A rider is bringing your order'
+            : '$riderName is bringing your order',
+        icon: Icons.delivery_dining,
+      ),
+      const _PipelineStep(
+        title: 'Delivered',
+        subtitle: 'Enjoy your Mr. Pizza order',
+        icon: Icons.home,
+      ),
+    ];
+  }
+
+  /// The pickup track: confirmed, cooking, collected. Three steps.
+  ///
+  /// The customer is standing at a counter reading this. Every line has to be
+  /// true of *this* order — which is why "waiting for the rider" and "on the
+  /// way" are gone rather than reworded. There is no rider, and nothing is
+  /// going anywhere.
+  List<_PipelineStep> _pickupPipelineSteps(OrderTracking tracking) {
+    final branch = tracking.branchName;
+    return [
+      const _PipelineStep(
+        title: 'Order Confirmed',
+        subtitle: 'The branch has your order',
+        icon: Icons.check_circle,
+      ),
+      const _PipelineStep(
+        title: 'Preparing Your Food',
+        subtitle: 'The kitchen is cooking your order',
+        icon: Icons.local_fire_department,
+      ),
+      _PipelineStep(
+        title: 'Ready to Collect',
+        subtitle: branch == null
+            ? 'Your food is packed and waiting at the counter'
+            : 'Your food is packed and waiting at $branch',
+        icon: Icons.takeout_dining_rounded,
+      ),
+      const _PipelineStep(
+        title: 'Collected',
+        subtitle: 'Enjoy your Mr. Pizza order',
+        icon: Icons.check_circle_rounded,
+      ),
+    ];
   }
 
   Widget _buildTrackingStep({

@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/rider_repository.dart';
-import '../logic/delivery_actions.dart';
-import '../models/rider_availability.dart';
 import '../models/rider_delivery.dart';
 
 /// The rider's own record. Null means the panel has not created it yet, which
@@ -16,50 +14,89 @@ final riderDeliveriesProvider = StreamProvider<List<RiderDelivery>>((ref) {
   return ref.watch(riderRepositoryProvider).streamDeliveries();
 });
 
-/// The store's payout per completed delivery. 0 means unreadable.
-final payoutRateProvider = FutureProvider<double>((ref) async {
-  return ref.watch(riderRepositoryProvider).fetchPayoutRate();
-});
+/// How many deliveries "My Deliveries" asks for at a time.
+const int riderHistoryPageSize = 20;
 
-final riderAvailabilityProvider = FutureProvider<RiderAvailability>((ref) async {
-  final details = await ref.watch(riderDetailsProvider.future);
-  return details?.availability ?? RiderAvailability.offline;
-});
+/// What the "My Deliveries" screen has loaded so far.
+class RiderHistoryState {
+  final List<RiderDelivery> deliveries;
+  final bool hasMore;
+  final bool isLoadingMore;
 
-/// Payout earned so far. Zero when the rate could not be read, never a guess.
-final riderEarningsProvider = FutureProvider<double>((ref) async {
-  final deliveries = await ref.watch(riderDeliveriesProvider.future);
-  final rate = await ref.watch(payoutRateProvider.future);
-  return earningsFor(deliveries, rate);
-});
+  const RiderHistoryState({
+    required this.deliveries,
+    required this.hasMore,
+    this.isLoadingMore = false,
+  });
 
-/// Going online and offline. The database refuses to mark a rider available
-/// while they hold a job, and that refusal is rethrown so the dashboard can
-/// show the database's own wording.
-class RiderAvailabilityController extends Notifier<AsyncValue<void>> {
+  RiderHistoryState copyWith({
+    List<RiderDelivery>? deliveries,
+    bool? hasMore,
+    bool? isLoadingMore,
+  }) {
+    return RiderHistoryState(
+      deliveries: deliveries ?? this.deliveries,
+      hasMore: hasMore ?? this.hasMore,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+    );
+  }
+}
+
+/// Loads "My Deliveries" one page at a time.
+///
+/// Separate from the dashboard's live stream on purpose: the dashboard only
+/// ever needs the job in hand and a short recent peek, while this list can grow
+/// to every delivery the rider has ever finished. Paging keeps both the
+/// download and the rebuild small however long the rider has worked.
+class RiderHistoryController extends AsyncNotifier<RiderHistoryState> {
+  int _nextOffset = 0;
+
   @override
-  AsyncValue<void> build() => const AsyncData(null);
+  Future<RiderHistoryState> build() => _loadFirstPage();
 
-  Future<void> goOnline() => _send('available');
+  Future<RiderHistoryState> _loadFirstPage() async {
+    final page = await ref
+        .read(riderRepositoryProvider)
+        .fetchDeliveryHistoryPage(limit: riderHistoryPageSize, offset: 0);
+    _nextOffset = page.deliveries.length;
+    return RiderHistoryState(
+      deliveries: page.deliveries,
+      hasMore: page.hasMore,
+    );
+  }
 
-  Future<void> goOffline() => _send('offline');
-
-  Future<void> _send(String status) async {
+  /// Re-reads the first page, throwing away anything already loaded.
+  Future<void> refresh() async {
     state = const AsyncLoading();
+    state = await AsyncValue.guard(_loadFirstPage);
+  }
+
+  /// Appends the next page, keeping what is already on screen.
+  Future<void> loadMore() async {
+    final current = state.valueOrNull;
+    if (current == null || !current.hasMore || current.isLoadingMore) return;
+
+    state = AsyncData(current.copyWith(isLoadingMore: true));
     try {
-      await ref.read(riderRepositoryProvider).setAvailability(status);
-      ref.invalidate(riderDetailsProvider);
-      state = const AsyncData(null);
-    } catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      final page = await ref
+          .read(riderRepositoryProvider)
+          .fetchDeliveryHistoryPage(
+              limit: riderHistoryPageSize, offset: _nextOffset);
+      _nextOffset += page.deliveries.length;
+      state = AsyncData(RiderHistoryState(
+        deliveries: [...current.deliveries, ...page.deliveries],
+        hasMore: page.hasMore,
+      ));
+    } catch (_) {
+      state = AsyncData(current.copyWith(isLoadingMore: false));
       rethrow;
     }
   }
 }
 
-final riderAvailabilityController =
-    NotifierProvider<RiderAvailabilityController, AsyncValue<void>>(
-        RiderAvailabilityController.new);
+final riderHistoryControllerProvider =
+    AsyncNotifierProvider<RiderHistoryController, RiderHistoryState>(
+        RiderHistoryController.new);
 
 /// The lifecycle transitions. Each one invalidates the deliveries and the rider
 /// record so the dashboard re-reads the truth from the database rather than
@@ -71,17 +108,22 @@ class RiderTransitionController extends Notifier<AsyncValue<void>> {
   Future<void> claimOffer(String assignmentId) =>
       _run(() => ref.read(riderRepositoryProvider).claimOffer(assignmentId));
 
-  Future<void> declineOffer(String assignmentId) => _run(
-      () => ref.read(riderRepositoryProvider).declineOffer(assignmentId));
+  Future<void> declineOffer(String assignmentId) =>
+      _run(() => ref.read(riderRepositoryProvider).declineOffer(assignmentId));
 
-  Future<void> markPickedUp(String assignmentId) => _run(
-      () => ref.read(riderRepositoryProvider).markPickedUp(assignmentId));
+  Future<void> markPickedUp(String assignmentId) =>
+      _run(() => ref.read(riderRepositoryProvider).markPickedUp(assignmentId));
 
   Future<void> completeDelivery(String assignmentId) => _run(
       () => ref.read(riderRepositoryProvider).completeDelivery(assignmentId));
 
-  Future<void> failDelivery(String assignmentId, String reason) => _run(
-      () => ref.read(riderRepositoryProvider).failDelivery(assignmentId, reason));
+  Future<void> failDelivery(String assignmentId, String reason) => _run(() =>
+      ref.read(riderRepositoryProvider).failDelivery(assignmentId, reason));
+
+  /// Settles the cash once the delivery is done. The list is invalidated by
+  /// [_run], so the job drops its "Cash Collected" button the moment this lands.
+  Future<void> markCashCollected(String orderId) => _run(
+      () => ref.read(riderRepositoryProvider).markCashCollected(orderId));
 
   Future<void> _run(Future<void> Function() action) async {
     state = const AsyncLoading();
@@ -89,7 +131,6 @@ class RiderTransitionController extends Notifier<AsyncValue<void>> {
       await action();
       ref.invalidate(riderDeliveriesProvider);
       ref.invalidate(riderDetailsProvider);
-      ref.invalidate(riderEarningsProvider);
       state = const AsyncData(null);
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);

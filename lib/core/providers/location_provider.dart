@@ -1,27 +1,34 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/location/data/geocoding_service.dart';
 import '../../features/location/data/geolocator_device_location_source.dart';
 import '../../features/location/data/location_repository.dart';
-import '../../features/location/data/nominatim_address_lookup.dart';
 import '../../features/profile/models/profile.dart';
 
-/// Where the app lives, for the OpenStreetMap User-Agent.
+/// The app's one geocoder: reverse for the delivery map's pin, forward for a
+/// typed address.
 ///
-/// OpenStreetMap's usage policy requires a way to contact the operator of an
-/// app that uses Nominatim. Replace the email below with a real monitored
-/// address before shipping to the public — see docs/superpowers/specs.
-const String nominatimUserAgent = 'MrPizza/1.0 (contact@example.com)';
+/// Mapbox Geocoding v6 serves both directions, and it runs on the same public
+/// token the map already uses, so there is no second service, no second key and
+/// no second failure mode to reason about. It replaced OpenStreetMap's
+/// Nominatim, which needed a monitored contact address in its User-Agent and
+/// answered `403` when that contact was a placeholder.
+final geocodingServiceProvider = Provider<GeocodingService>((ref) {
+  final service = GeocodingService();
+  ref.onDispose(service.dispose);
+
+  return service;
+});
 
 /// The single location repository used by the app: real device GPS plus
-/// OpenStreetMap reverse geocoding.
+/// Mapbox reverse geocoding.
 final locationRepositoryProvider = Provider<LocationRepository>((ref) {
-  final lookup = NominatimAddressTextLookup(userAgent: nominatimUserAgent);
-  ref.onDispose(lookup.dispose);
+  final geocoder = ref.watch(geocodingServiceProvider);
 
   return LocationRepository(
     deviceSource: GeolocatorDeviceLocationSource(),
-    addressLookup: lookup,
-    coordinateLookup: lookup,
+    addressLookup: geocoder,
+    coordinateLookup: geocoder,
   );
 });
 
@@ -81,8 +88,7 @@ class LocationState {
       longitude: longitude ?? this.longitude,
       isCapturing: isCapturing ?? this.isCapturing,
       errorMessage: errorMessage ?? this.errorMessage,
-      settingsMustBeOpened:
-          settingsMustBeOpened ?? this.settingsMustBeOpened,
+      settingsMustBeOpened: settingsMustBeOpened ?? this.settingsMustBeOpened,
     );
   }
 }
@@ -91,8 +97,7 @@ class LocationState {
 class LocationNotifier extends StateNotifier<LocationState> {
   final LocationRepository repository;
 
-  LocationNotifier({required this.repository})
-      : super(const LocationState());
+  LocationNotifier({required this.repository}) : super(const LocationState());
 
   /// The state a fresh notifier starts in, with no address and no pin.
   LocationState build() => const LocationState();
@@ -162,6 +167,26 @@ class LocationNotifier extends StateNotifier<LocationState> {
         settingsMustBeOpened: error.settingsMustBeOpened,
       );
     }
+  }
+
+  /// Applies a position the customer chose by hand on the delivery map.
+  ///
+  /// The coordinates come from the map camera's centre and the text from the
+  /// city/area/landmark they described, so both are kept together. A fresh
+  /// [LocationState] is built rather than using [copyWith], because `copyWith`
+  /// cannot clear a field — and confirming a new pick must drop the previous
+  /// pin and address outright, not merge them.
+  void applyMapPick({
+    required double latitude,
+    required double longitude,
+    required String addressText,
+  }) {
+    state = LocationState(
+      address: addressText.trim(),
+      isSet: true,
+      latitude: latitude,
+      longitude: longitude,
+    );
   }
 
   /// Sends the customer to the OS settings page to grant location access.

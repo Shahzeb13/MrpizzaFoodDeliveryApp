@@ -1,6 +1,32 @@
 # MrPizza — Progress Log
 Changes done by Shahzeb
 
+## 2026-10-19 — Pin names landmarks via Search Box; Geocoding v6 removed
+
+- **Why**: with Geocoding v6 the pin only ever resolved to "Abbottabad, Khyber Pakhtunkhwa, Pakistan" — verified against the live API, which returns just country/region/city for that point and has no street, house or landmark data. v6 dropped point-of-interest data entirely, so a hotel or shop was unreachable by design.
+- **Now the Mapbox Search Box API** (`lib/features/location/data/geocoding_service.dart`), same public `pk.` token, same `getPlaceName(lat, lng)` signature, so the map UI needed no changes. Verified live: a `types=poi` reverse lookup in Abbottabad returns a real business (`Amjad Karyana Store`) at the pin.
+- **Two passes, first answer wins**: `types=poi` for landmarks, then `types=address,street`. A landmark is what a rider can act on, so it is asked for before a street.
+- **Label format**: `name` first, address after — "Triple One Hotel, Abbottabad, Pakistan". Falls back to `place_formatted`, then to the address alone when there is no name.
+- **All v6 code is gone**, both directions. The forward lookup (typed address → pin, which drives nearest-branch matching) moved to Search Box `/forward`; leaving it on v6 would have kept the old API alive and broken nothing to have done so, but the brief was to remove v6 completely.
+- **`/reverse` sends no `session_token`** — only `/suggest` and `/retrieve` take one. Asserted in a test.
+- **Unchanged on purpose**: still fires only on map idle, still drops superseded answers, still shows "Finding location…" / "Unknown place", still never caches or stores the result, and never sends `permanent`.
+- **Tests**: `flutter analyze` clean; 24 geocoding tests pass, including the `[longitude, latitude]` order that would otherwise drop a customer in the ocean.
+- **Caveat**: `types=address,street` returns empty for Abbottabad — Mapbox has no street-level data there, so an address dropped away from a known business will still read "Unknown place". Nominatim used to supply the street name for that case.
+- **Still open**: the real Mansehra shop address and coordinates are unknown. GPS has not been exercised on a physical device.
+
+## 2026-10-19 — Pin shows its place name; OpenStreetMap removed
+
+- **Why**: the delivery map filled the address box but never said *where the pin is* while the customer was still moving it, so choosing a spot was guesswork until they let go. Separately, `nominatimUserAgent` had carried a placeholder contact since 2026-09-26 and Nominatim answers `403` for one — meaning the address box had been silently failing to fill.
+- **Place name under the pin**: `GeocodingService.getPlaceName(lat, lng)` calls Mapbox Geocoding v6 reverse and the bottom card shows the name, `Finding location…` while it waits, and `Unknown place` when nothing comes back. It fires from the map's existing `onMapIdleListener` — the moment the customer lets go — never on the camera-change frames.
+- **OpenStreetMap is gone.** `nominatim_address_lookup.dart` and its test are deleted, along with `nominatimUserAgent`, `NOMINATIM_CONTACT_EMAIL` and the `.env` entry for it. `GeocodingService` now serves **both** directions, so `locationRepositoryProvider` has one geocoder instead of a second service with its own key.
+- **One lookup, two jobs.** Reverse geocoding answers the same question whether it is asked for the pin label or the address to save, so the sheet names the pin once and reuses that answer for the field. Nominatim's 2-second/30-metre throttle is gone with it — it existed only for Nominatim's 1-request-per-second policy.
+- **Stale answers are dropped.** The service counts reverse requests and discards any answer overtaken by a newer one, so a slow reply can never label a pin the customer has already moved.
+- **Still temporary.** No `permanent=true`, no cache, no database write. A cached place name would go stale the instant the pin moves.
+- **Same token, one bill.** Geocoding reuses `MapboxConfig.usableToken`, which is null for an `sk.` token — a misconfigured build makes no request at all rather than shipping a secret.
+- **Tests**: `flutter analyze` clean; 16 geocoding tests and 87 location tests pass.
+- **Not verified against the live API** — only mocked responses. If Mapbox's real payload differs, the card shows `Unknown place` instead of crashing.
+- **Still open**: the real Mansehra shop address and coordinates are unknown, and the Mapbox token needs its geocoding scope enabled before the address box will fill. GPS has not been exercised on a physical device.
+
 ## 2026-09-26 — Customer location capture (GPS + OpenStreetMap), branch truthfulness
 
 - **Why**: the app shipped hardcoded fake location. `LocationNotifier.useCurrentLocation()` returned the literal string `"COMSATS University, Abbottabad Campus"`, `LocationState` defaulted to `"COMSATS Abbottabad, Phase 2"`, and the address form asked customers to type latitude and longitude by hand. Nearest-branch selection was therefore decorative.

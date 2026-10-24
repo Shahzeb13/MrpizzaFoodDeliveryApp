@@ -210,6 +210,22 @@ void stopFollowingLiveOrder(WidgetRef ref, String orderId) {
   ref.read(liveOrderAdoptionClosedProvider.notifier).state = true;
 }
 
+/// Releases the bar after this app has deleted an order itself.
+///
+/// Only the discard path reaches this. `discard_unpaid_order` removes an unpaid
+/// online order when a customer walks away from PayFast's page, and the bar had
+/// every reason to have adopted it in the meantime: it was a real row, fresh,
+/// and unfinished. Nothing about the bar's behaviour was wrong — what was
+/// missing was anyone telling it the row had gone.
+///
+/// Said here rather than left to the next poll, because "the customer is about
+/// to be shown the payment page again" is the exact moment a menu screen
+/// carrying a phantom order would be noticed.
+void forgetDeletedLiveOrder(WidgetRef ref, String orderId) {
+  stopFollowingLiveOrder(ref, orderId);
+  refreshLiveOrderLookup(ref);
+}
+
 /// What the customer has already been shown about each finished order.
 ///
 /// Keyed by order id so dismissing Tuesday's cancellation cannot hide a new one

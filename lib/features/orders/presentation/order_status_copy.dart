@@ -10,8 +10,17 @@ import '../models/order_tracking.dart';
 /// them here means "Ready for pickup" cannot read one way on the big card and
 /// another way in the list, and a new status is added in exactly one place.
 
-/// How many of the five pipeline steps the order has actually finished.
-int pipelineProgressFor(OrderStage stage) {
+/// How many of a track's steps the order has actually finished.
+///
+/// [stepCount] is how many steps that particular order's track has. It has to
+/// be passed in rather than assumed, because a pickup order has three steps and
+/// a delivery order has five — [OrderTracking.pipelineLength] is what the
+/// caller should hand over. Hard-coding five here would leave a collected
+/// pickup order showing a track that stops three-quarters of the way across.
+int pipelineProgressFor(
+  OrderStage stage, {
+  int stepCount = OrderTracking.pipelineStepCount,
+}) {
   switch (stage) {
     case OrderStage.orderConfirmed:
       return 0;
@@ -21,20 +30,49 @@ int pipelineProgressFor(OrderStage stage) {
       return 2;
     case OrderStage.riderHeadingToBranch:
     case OrderStage.outForDelivery:
-      return 3;
+      // Never reached on a pickup order — the database refuses to put one into
+      // a rider stage, and nobody is assigned to it. Clamped rather than
+      // trusted so a hand-edited row cannot push a three-step track past its
+      // own end.
+      return stepCount > OrderTracking.pickupPipelineStepCount
+          ? stepCount - 2
+          : stepCount;
     case OrderStage.delivered:
-      return OrderTracking.pipelineStepCount;
+      return stepCount;
     case OrderStage.cancelled:
       return 0;
     case OrderStage.unknown:
       // Deliberately zero, not full. An unknown status has completed no known
-      // step, and claiming it finished all five would be a second lie stacked
+      // step, and claiming it finished all of them would be a second lie stacked
       // on top of the first.
       return 0;
   }
 }
 
 String stageHeadline(OrderStage stage, OrderTracking tracking) {
+  // A pickup order is finished when the customer walks out with it. Calling
+  // that "Delivered" is not a synonym — nobody delivered anything, and the
+  // customer is looking at the screen to find out whether they need to wait
+  // for a rider.
+  if (tracking.isPickup) {
+    switch (stage) {
+      case OrderStage.readyForPickup:
+        return 'Ready to Collect!';
+      case OrderStage.riderHeadingToBranch:
+      case OrderStage.outForDelivery:
+        // Only reachable if a row was hand-edited into a rider stage. Say the
+        // app is behind rather than invent a rider for an order that has none.
+        return 'Status Unavailable';
+      case OrderStage.delivered:
+        return 'Collected!';
+      case OrderStage.orderConfirmed:
+      case OrderStage.preparingInKitchen:
+      case OrderStage.cancelled:
+      case OrderStage.unknown:
+        break;
+    }
+  }
+
   switch (stage) {
     case OrderStage.orderConfirmed:
       return 'Order Placed!';
@@ -58,6 +96,30 @@ String stageHeadline(OrderStage stage, OrderTracking tracking) {
 String stageSubtitle(OrderStage stage, OrderTracking tracking) {
   final riderName = tracking.rider?.fullName;
   final who = riderName ?? 'Your rider';
+
+  if (tracking.isPickup) {
+    final branch = tracking.branchName;
+    switch (stage) {
+      case OrderStage.orderConfirmed:
+        return 'The branch has your order and will start cooking shortly';
+      case OrderStage.preparingInKitchen:
+        return 'The kitchen is cooking your order now';
+      case OrderStage.readyForPickup:
+        return branch == null
+            ? 'Your food is packed and waiting at the counter'
+            : 'Your food is packed and waiting at $branch';
+      case OrderStage.riderHeadingToBranch:
+      case OrderStage.outForDelivery:
+        return 'This order has been marked as a delivery by mistake. '
+            'Please contact the branch.';
+      case OrderStage.delivered:
+        return 'You have collected your order. Enjoy!';
+      case OrderStage.cancelled:
+        return 'This order was cancelled. Contact the branch if that is unexpected.';
+      case OrderStage.unknown:
+        return _unknownStatusSubtitle(tracking.status);
+    }
+  }
 
   switch (stage) {
     case OrderStage.orderConfirmed:

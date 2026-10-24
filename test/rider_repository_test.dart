@@ -53,15 +53,16 @@ String _functionCalledBy(http.Request request) =>
 void main() {
   setUp(_requests.clear);
 
-  test('claiming an offer calls rider_claim_offer for that assignment', () async {
+  test('claiming an offer calls rider_claim_offer for that assignment',
+      () async {
     final repository = RiderRepository(client: _clientReturning({}));
     await repository.claimOffer('assignment-1');
 
     expect(_requests, hasLength(1));
     expect(_functionCalledBy(_requests.single), 'rider_claim_offer');
     expect(_requests.single.method, 'POST');
-    expect(jsonDecode(_requests.single.body),
-        {'p_assignment_id': 'assignment-1'});
+    expect(
+        jsonDecode(_requests.single.body), {'p_assignment_id': 'assignment-1'});
   });
 
   test('every transition maps to its own database function', () async {
@@ -83,23 +84,14 @@ void main() {
     });
   });
 
-  test('setting availability calls rider_set_availability', () async {
-    final repository = RiderRepository(client: _clientReturning({}));
-    await repository.setAvailability('available');
-
-    expect(_functionCalledBy(_requests.single), 'rider_set_availability');
-    expect(jsonDecode(_requests.single.body), {'p_status': 'available'});
-  });
-
   test('a rejected transition surfaces the database message', () async {
     final repository = RiderRepository(client: _clientFailing());
 
     await expectLater(
       repository.claimOffer('a'),
       throwsA(
-        isA<RiderRepositoryException>()
-            .having((e) => e.message, 'message',
-                'This delivery is no longer available'),
+        isA<RiderRepositoryException>().having((e) => e.message, 'message',
+            'This delivery is no longer available'),
       ),
     );
   });
@@ -135,23 +127,72 @@ void main() {
     expect(_functionCalledBy(_requests.single), 'rider_deliveries');
   });
 
-  test('the payout rate is read from store_settings', () async {
+  test('the history page asks for a slice of finished deliveries only',
+      () async {
     final repository = RiderRepository(
-      client: _clientReturning({'rider_payout_per_delivery': 300}),
+      client: _clientReturning([
+        {
+          'assignment_id': 'a1',
+          'assignment_status': 'delivered',
+          'order_id': 'o1',
+          'bill_number': '#MP-1',
+          'customer_name': 'Usama',
+          'customer_phone': '0300',
+          'delivery_address': 'Mandian',
+          'delivery_latitude': 34.16,
+          'delivery_longitude': 73.22,
+          'branch_name': 'Abbottabad',
+          'branch_address': 'Niazi Road',
+          'item_summary': '1x Zinger',
+          'item_count': 1,
+          'assigned_at': '2026-09-28T10:00:00Z',
+          'picked_up_at': null,
+          'delivered_at': '2026-09-28T11:00:00Z',
+        }
+      ]),
     );
 
-    expect(await repository.fetchPayoutRate(), 300);
+    final page =
+        await repository.fetchDeliveryHistoryPage(limit: 20, offset: 40);
+
+    expect(page.deliveries, hasLength(1));
+    expect(page.hasMore, isFalse);
+    expect(jsonDecode(_requests.single.body), {
+      'p_limit': 21,
+      'p_offset': 40,
+      'p_history_only': true,
+    });
   });
 
-  test('an unreadable payout rate is zero, never a guess', () async {
-    expect(
-      await RiderRepository(client: _clientReturning({})).fetchPayoutRate(),
-      0,
-    );
-    expect(
-      await RiderRepository(client: _clientReturning([])).fetchPayoutRate(),
-      0,
-    );
+  test('a full page reports that there is more to fetch', () async {
+    final rows = [
+      for (var i = 0; i < 3; i++)
+        {
+          'assignment_id': 'a$i',
+          'assignment_status': 'delivered',
+          'order_id': 'o$i',
+          'bill_number': '#MP-$i',
+          'customer_name': 'Usama',
+          'customer_phone': '0300',
+          'delivery_address': 'Mandian',
+          'delivery_latitude': 34.16,
+          'delivery_longitude': 73.22,
+          'branch_name': 'Abbottabad',
+          'branch_address': 'Niazi Road',
+          'item_summary': '1x Zinger',
+          'item_count': 1,
+          'assigned_at': '2026-09-28T10:00:00Z',
+          'picked_up_at': null,
+          'delivered_at': '2026-09-28T11:00:00Z',
+        }
+    ];
+    final repository = RiderRepository(client: _clientReturning(rows));
+
+    final page =
+        await repository.fetchDeliveryHistoryPage(limit: 2, offset: 0);
+
+    expect(page.deliveries, hasLength(2));
+    expect(page.hasMore, isTrue);
   });
 
   test('a missing rider record is null so the screen can say so', () async {
@@ -184,7 +225,8 @@ void main() {
     expect(_requests, isEmpty);
   });
 
-  test('a failed read is not reported as an account that is not set up', () async {
+  test('a failed read is not reported as an account that is not set up',
+      () async {
     // Reporting a network or permission failure as "not set up yet" tells the
     // rider to go and ask the branch for an account they already have.
     final repository = RiderRepository(

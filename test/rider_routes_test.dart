@@ -4,7 +4,6 @@ import 'package:mrpizza/core/routing/route_guard.dart';
 
 const _riderScreens = [
   riderHistoryLocation,
-  riderEarningsLocation,
   riderLandingLocation,
 ];
 

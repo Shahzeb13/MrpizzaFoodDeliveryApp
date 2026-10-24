@@ -76,7 +76,10 @@ void _reportRealtimeEvent(String label) {
 /// of coverage can miss an event outright — and a customer staring at "Preparing"
 /// while their food is already at the door is the worst thing this screen can
 /// do. This is the backstop for that, not the primary path.
-const Duration _safetyNetRefreshInterval = Duration(seconds: 20);
+///
+/// Public and injectable so a test can prove the poll works without spending
+/// twenty seconds per case.
+const Duration orderTrackingSafetyNetPollInterval = Duration(seconds: 20);
 
 /// How long a single read may take before it is treated as failed.
 ///
@@ -156,7 +159,7 @@ class OrderTrackingRepository {
   /// re-read runs alongside it. The interval is long enough to be free and short
   /// enough that nobody is misled about where their food is.
   ///
-  /// Live only while the app is open. A customer with the app closed sees the
+/// Live only while the app is open. A customer with the app closed sees the
   /// current state the next time they open it; push notifications would be the
   /// fix for that and need a Firebase project.
   ///
@@ -169,6 +172,7 @@ class OrderTrackingRepository {
   Stream<OrderTracking?> watchOrderTracking(
     String orderId, {
     String channelPrefix = 'order-tracking',
+    Duration safetyNetPollInterval = orderTrackingSafetyNetPollInterval,
   }) {
     if (orderId.isEmpty) {
       return Stream<OrderTracking?>.value(null);
@@ -206,73 +210,111 @@ class OrderTrackingRepository {
           controller.add(tracking);
         } catch (error) {
           if (closed || controller.isClosed) return;
-          // Only a failed FIRST read is something the customer has to act on.
-          // After that, keep showing the last state the database actually gave
-          // us and try again on the next tick — blanking a delivery screen
-          // because one poll timed out is worse than showing data a few
-          // seconds old.
+
+          // A REFUSAL is not a failed read, and the difference is the whole
+          // point of this branch.
+          //
+          // `order_tracking()` answering `ok: false` is the database stating
+          // that there is no such order — and the app itself causes that
+          // routinely: `discard_unpaid_order` deletes an order when a customer
+          // walks away from PayFast's page, and the bar had adopted that order
+          // seconds earlier because it was, at that moment, a perfectly real
+          // row. Retaining the last state through a refusal is what left the
+          // menu screen claiming a pizza was in the oven for a bill number the
+          // database no longer had any row for, with nothing to tap and nothing
+          // to dismiss.
+          if (error is OrderTrackingException) {
+            // A refusal before anything was ever shown is still reported as an
+            // error: the tracking screen explains itself, and the caller has no
+            // stale state to contradict.
+            if (!hasDeliveredOnce) {
+              controller.addError(error);
+              return;
+            }
+            applied = null;
+            controller.add(null);
+            return;
+          }
+
+          // Everything else is a transport failure: a timeout, a dropped
+          // socket, a 5xx. Only a failed FIRST read is something the customer
+          // has to act on. After that, keep showing the last state the database
+          // actually gave us and try again on the next tick — blanking a
+          // delivery screen because one poll timed out is worse than showing
+          // data a few seconds old.
           if (!hasDeliveredOnce) controller.addError(error);
         }
       });
 
       final channelLabel = '$channelPrefix-$orderId';
-      final channel = client
-          .channel(channelLabel)
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'orders',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'id',
-              value: orderId,
-            ),
-            callback: (_) {
-            _reportRealtimeEvent(channelLabel);
-            emit();
-          },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'order_status_history',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'order_id',
-              value: orderId,
-            ),
-            callback: (_) {
-            _reportRealtimeEvent(channelLabel);
-            emit();
-          },
-          )
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'rider_assignments',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'order_id',
-              value: orderId,
-            ),
-            callback: (_) {
-            _reportRealtimeEvent(channelLabel);
-            emit();
-          },
-          );
+
+      // The socket is an optimisation, not a dependency. Opening it is allowed
+      // to fail: the poll below is the reason a dropped socket is only ever a
+      // delay rather than a dead screen.
+      RealtimeChannel? channel;
+      try {
+        channel = client
+            .channel(channelLabel)
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'orders',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'id',
+                value: orderId,
+              ),
+              callback: (_) {
+                _reportRealtimeEvent(channelLabel);
+                emit();
+              },
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'order_status_history',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'order_id',
+                value: orderId,
+              ),
+              callback: (_) {
+                _reportRealtimeEvent(channelLabel);
+                emit();
+              },
+            )
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'rider_assignments',
+              filter: PostgresChangeFilter(
+                type: PostgresChangeFilterType.eq,
+                column: 'order_id',
+                value: orderId,
+              ),
+              callback: (_) {
+                _reportRealtimeEvent(channelLabel);
+                emit();
+              },
+            );
+
+        _installSocketDiagnostics(client);
+        channel.subscribe();
+      } catch (_) {
+        channel = null;
+      }
 
       final safetyNet = Timer.periodic(
-        _safetyNetRefreshInterval,
+        safetyNetPollInterval,
         (_) => emit(),
       );
 
-      _installSocketDiagnostics(client);
-      channel.subscribe();
       controller.onCancel = () {
         closed = true;
         gate.close();
         safetyNet.cancel();
-        client.removeChannel(channel);
+        final open = channel;
+        if (open != null) client.removeChannel(open);
       };
 
       emit();
@@ -371,7 +413,7 @@ class OrderTrackingRepository {
           );
 
       final safetyNet = Timer.periodic(
-        _safetyNetRefreshInterval,
+        orderTrackingSafetyNetPollInterval,
         (_) => emit(),
       );
 

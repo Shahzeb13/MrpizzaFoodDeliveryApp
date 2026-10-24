@@ -1,9 +1,18 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/supabase_client.dart';
-import '../models/rider_availability.dart';
+import '../../orders/data/coalesced_read_gate.dart';
+
 import '../models/rider_delivery.dart';
+
+/// How often the rider panel re-reads its work even when nothing has been
+/// pushed.
+///
+/// Same figure the customer order screens use.
+const Duration riderSafetyNetPollInterval = Duration(seconds: 20);
 
 /// A channel name unique to this rider, so two signed-in riders on the same
 /// socket do not end up sharing a subscription.
@@ -74,7 +83,7 @@ class RiderRepository {
 
     final row = await client
         .from('rider_details')
-        .select('branch_id, status, branch:branches(name, address)')
+        .select('branch_id, branch:branches(name, address)')
         .eq('profile_id', riderId)
         .maybeSingle();
 
@@ -87,68 +96,120 @@ class RiderRepository {
     final rows = await client.rpc('rider_deliveries');
     if (rows is! List) return const [];
     return rows
-        .map((row) => RiderDelivery
-            .fromAssignmentRow(Map<String, dynamic>.from(row as Map)))
+        .map((row) => RiderDelivery.fromAssignmentRow(
+            Map<String, dynamic>.from(row as Map)))
         .toList();
+  }
+
+  /// One page of finished deliveries, newest first.
+  ///
+  /// Reads through the same `rider_deliveries` function as the dashboard, but
+  /// asks the database for only [limit] rows from [offset] and for finished
+  /// jobs only. A rider with years of history therefore downloads one screenful
+  /// at a time instead of the whole list just to open "My Deliveries".
+  ///
+  /// One extra row is requested so [RiderDeliveryPage.hasMore] is known without
+  /// a separate count or an empty page at the end of an exact multiple.
+  Future<RiderDeliveryPage> fetchDeliveryHistoryPage({
+    required int limit,
+    required int offset,
+  }) async {
+    final rows = await client.rpc('rider_deliveries', params: {
+      'p_limit': limit + 1,
+      'p_offset': offset,
+      'p_history_only': true,
+    });
+    if (rows is! List) {
+      return const RiderDeliveryPage(deliveries: [], hasMore: false);
+    }
+    final deliveries = rows
+        .map((row) => RiderDelivery.fromAssignmentRow(
+            Map<String, dynamic>.from(row as Map)))
+        .toList();
+    final hasMore = deliveries.length > limit;
+    return RiderDeliveryPage(
+      deliveries: hasMore ? deliveries.take(limit).toList() : deliveries,
+      hasMore: hasMore,
+    );
   }
 
   /// The same assignments, re-read every time the database says they changed.
   ///
+  /// Realtime is the fast path and a poll is the floor underneath it. Relying on
+  /// the socket alone meant a rider who never thought to pull down saw no new
+  /// order at all, which is the one failure a delivery panel cannot have: the
+  /// work is sitting there waiting while the screen says there is nothing. The
+  /// socket also never reports its own failures — a channel that failed to join,
+  /// or died on a network change, is indistinguishable from an idle one — so a
+  /// silent drop looks exactly like a quiet afternoon.
+  ///
   /// Live only while the app is open. A rider with the app closed is not told
-  /// about a new assignment until they next open it; push notifications are
-  /// the fix for that and need a Firebase project.
-  Stream<List<RiderDelivery>> streamDeliveries() {
-    final riderId = client.auth.currentUser?.id;
+  /// about a new assignment until they next open it; push notifications are the
+  /// fix for that and need a Firebase project.
+  Stream<List<RiderDelivery>> streamDeliveries({
+    Duration safetyNetPollInterval = riderSafetyNetPollInterval,
+  }) {
+    final riderId = signedInUserId;
     if (riderId == null) {
       return Stream<List<RiderDelivery>>.value(const <RiderDelivery>[]);
     }
 
     return Stream<List<RiderDelivery>>.multi((controller) {
+      // Two doors into one room, so the reads are serialised. Without this, an
+      // event landing as a tick fires can resolve second with older data and
+      // rewind the list the rider is looking at.
+      final readGate = CoalescedReadGate();
+      Timer? safetyNet;
+
       Future<void> emit() async {
-        try {
-          controller.add(await fetchDeliveries());
-        } catch (error) {
-          controller.addError(error);
-        }
+        await readGate.request(() async {
+          try {
+            controller.add(await fetchDeliveries());
+          } catch (error) {
+            controller.addError(error);
+          }
+        });
       }
 
-      final channel = client
-          .channel(riderAssignmentChannelName(riderId))
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'rider_assignments',
-            filter: riderAssignmentChangeFilter(riderId),
-            callback: (_) => emit(),
-          );
+      // The socket is an optimisation, not a dependency. Opening it is allowed
+      // to fail: if it throws, the poll below still runs, which is the entire
+      // reason there is a poll. Letting this take the stream down with it would
+      // leave a rider with a dead panel and no way to recover short of reopening
+      // the app.
+      RealtimeChannel? channel;
+      try {
+        channel = client
+            .channel(riderAssignmentChannelName(riderId))
+            .onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: 'rider_assignments',
+              filter: riderAssignmentChangeFilter(riderId),
+              callback: (_) => emit(),
+            );
+        channel.subscribe();
+      } catch (_) {
+        channel = null;
+      }
 
-      channel.subscribe();
-      controller.onCancel = () => client.removeChannel(channel);
+      safetyNet = Timer.periodic(safetyNetPollInterval, (_) => emit());
+
+      controller.onCancel = () {
+        safetyNet?.cancel();
+        readGate.close();
+        final open = channel;
+        if (open != null) client.removeChannel(open);
+      };
 
       emit();
     });
   }
 
-  /// The store's configured payout per completed delivery, or 0 when it cannot
-  /// be read. Zero is passed through to the earnings rule, which then reports
-  /// 0 rather than inventing a figure.
-  Future<double> fetchPayoutRate() async {
-    final row = await client
-        .from('store_settings')
-        .select('rider_payout_per_delivery')
-        .limit(1)
-        .maybeSingle();
-    if (row == null) return 0;
-    final value = row['rider_payout_per_delivery'];
-    if (value is num) return value.toDouble();
-    return 0;
-  }
-
   Future<void> claimOffer(String assignmentId) =>
       _callTransition('rider_claim_offer', {'p_assignment_id': assignmentId});
 
-  Future<void> declineOffer(String assignmentId) => _callTransition(
-      'rider_decline_offer', {'p_assignment_id': assignmentId});
+  Future<void> declineOffer(String assignmentId) =>
+      _callTransition('rider_decline_offer', {'p_assignment_id': assignmentId});
 
   Future<void> markPickedUp(String assignmentId) => _callTransition(
       'rider_mark_picked_up', {'p_assignment_id': assignmentId});
@@ -162,8 +223,13 @@ class RiderRepository {
         'p_reason': reason,
       });
 
-  Future<void> setAvailability(String status) =>
-      _callTransition('rider_set_availability', {'p_status': status});
+  /// Marks the cash for [orderId] as collected.
+  ///
+  /// Separate from [completeDelivery] on purpose: the delivery is finished when
+  /// the pizza is handed over, but the money is not in the till until then, and
+  /// an order the customer never paid for still has to be closeable out.
+  Future<void> markCashCollected(String orderId) =>
+      _callTransition('mark_cash_collected', {'p_order_id': orderId});
 
   Future<void> _callTransition(
     String function,
@@ -184,13 +250,11 @@ class RiderRepository {
 /// The rider's own record, used to tell "not set up yet" from "set up".
 class RiderDetails {
   final String? branchId;
-  final RiderAvailability availability;
   final String branchName;
   final String branchAddress;
 
   const RiderDetails({
     required this.branchId,
-    required this.availability,
     required this.branchName,
     required this.branchAddress,
   });
@@ -201,11 +265,21 @@ class RiderDetails {
         branch is Map ? Map<String, dynamic>.from(branch) : <String, dynamic>{};
     return RiderDetails(
       branchId: row['branch_id'] as String?,
-      availability: riderAvailabilityFromDatabaseValue(row['status'] as String?),
       branchName: (branchMap['name'] as String?) ?? '',
       branchAddress: (branchMap['address'] as String?) ?? '',
     );
   }
+}
+
+/// One page of finished deliveries, and whether another page exists.
+class RiderDeliveryPage {
+  final List<RiderDelivery> deliveries;
+  final bool hasMore;
+
+  const RiderDeliveryPage({
+    required this.deliveries,
+    required this.hasMore,
+  });
 }
 
 final riderRepositoryProvider = Provider<RiderRepository>(
