@@ -1,16 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../profile/providers/profile_provider.dart';
 import '../data/rider_repository.dart';
 import '../models/rider_delivery.dart';
 
 /// The rider's own record. Null means the panel has not created it yet, which
 /// the dashboard shows as a setup message rather than an empty screen.
+///
+/// Watches the signed-in user so a different rider signing in on the same
+/// device never sees the previous rider's branch or an empty "not set up" state.
 final riderDetailsProvider = FutureProvider<RiderDetails?>((ref) async {
+  // Read for invalidation only: the repository already scopes the query to the
+  // signed-in rider, and returns null when there is nobody signed in.
+  ref.watch(currentUserIdProvider);
   return ref.watch(riderRepositoryProvider).fetchRiderDetails();
 });
 
 /// The rider's assignments, re-read whenever the database says they changed.
+///
+/// Scoped to the signed-in user for the same reason as [riderDetailsProvider]:
+/// the stream captures one rider id when it starts, so without this a second
+/// rider logging in would keep watching the first rider's queue.
 final riderDeliveriesProvider = StreamProvider<List<RiderDelivery>>((ref) {
+  // Read for invalidation only: [RiderRepository.streamDeliveries] captures the
+  // signed-in rider when it starts, so the provider must rebuild when that
+  // rider changes.
+  ref.watch(currentUserIdProvider);
   return ref.watch(riderRepositoryProvider).streamDeliveries();
 });
 
@@ -52,7 +67,12 @@ class RiderHistoryController extends AsyncNotifier<RiderHistoryState> {
   int _nextOffset = 0;
 
   @override
-  Future<RiderHistoryState> build() => _loadFirstPage();
+  Future<RiderHistoryState> build() {
+    // Rebuilt when the signed-in user changes, so rider history is never
+    // carried over from the previous account on a shared phone.
+    ref.watch(currentUserIdProvider);
+    return _loadFirstPage();
+  }
 
   Future<RiderHistoryState> _loadFirstPage() async {
     final page = await ref

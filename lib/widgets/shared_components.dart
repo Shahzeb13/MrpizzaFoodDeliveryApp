@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../core/providers/location_provider.dart';
+import '../core/routing/route_guard.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/widgets.dart';
@@ -245,6 +247,14 @@ class FavoriteButton extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () async {
+        // Favourites are rows in the database tied to the account, so a guest
+        // is asked to sign in rather than silently gaining nothing and
+        // wondering why the heart did nothing.
+        if (ref.read(currentUserIdProvider) == null) {
+          showTopCartToast(context, 'Log in to save favourites.');
+          context.push(loginLocation);
+          return;
+        }
         try {
           await ref.read(favoritesProvider.notifier).toggleFavorite(item.id);
           if (!context.mounted) return;
@@ -403,8 +413,6 @@ class PizzaCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-
     void addToCart() {
       ref.read(cartProvider.notifier).addItem(
             item: item,
@@ -417,15 +425,20 @@ class PizzaCard extends ConsumerWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFFF0F3F8),
+        borderRadius: BorderRadius.circular(26),
         boxShadow: const [
           BoxShadow(
-            color: AppColors.shadowSoft,
-            blurRadius: 10,
-            offset: Offset(0, 5),
+            color: Colors.white,
+            offset: Offset(-5, -5),
+            blurRadius: 14,
+          ),
+          BoxShadow(
+            color: Color(0x33A6B4C9),
+            offset: Offset(5, 5),
+            blurRadius: 14,
           ),
         ],
       ),
@@ -433,75 +446,144 @@ class PizzaCard extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(26),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(20, 18, 14, 18),
             child: Row(
               children: [
+                // Left Column: Category Eyebrow, Title, Favorite Heart Button
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _ItemTag(
-                        text: item.categoryName.toUpperCase(),
-                        color: AppColors.textLight,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (item.categoryName.isNotEmpty
+                                    ? item.categoryName
+                                    : 'PIZZA FLAVOURS')
+                                .toUpperCase(),
+                            style: const TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFE51926),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF141923),
+                              letterSpacing: -0.4,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 5),
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      if (item.isBestseller) ...[
-                        const SizedBox(height: 8),
-                        const _ItemTag(
-                          text: 'Bestseller',
-                          color: AppColors.primary,
+                      const SizedBox(height: 24),
+                      // Soft Circular Heart Wishlist Button
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFF0F3F8),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.white,
+                              offset: Offset(-3, -3),
+                              blurRadius: 6,
+                            ),
+                            BoxShadow(
+                              color: Color(0x2AA6B4C9),
+                              offset: Offset(3, 3),
+                              blurRadius: 6,
+                            ),
+                          ],
                         ),
-                      ],
+                        child: FavoriteButton(item: item, size: 20),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 14),
+
+                // Right: Debossed Well with Circular Pizza Cutout & Red Plus Button
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 86,
-                      height: 86,
+                      width: 110,
+                      height: 110,
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border),
+                        color: const Color(0xFFE5EBF3),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            offset: const Offset(2, 2),
+                            blurRadius: 4,
+                          ),
+                          const BoxShadow(
+                            color: Colors.white,
+                            offset: Offset(-2, -2),
+                            blurRadius: 4,
+                          ),
+                        ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(19),
+                      child: ClipOval(
                         child: Image.network(
                           MenuRepository.resolveImageUrl(item.imageUrl),
-                          width: 86,
-                          height: 86,
+                          width: 94,
+                          height: 94,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: AppColors.sand,
-                              child: const Center(
-                                child:
-                                    Text('🍕', style: TextStyle(fontSize: 32)),
-                              ),
+                            return Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
                             );
                           },
                         ),
                       ),
                     ),
+                    // Floating Red + Button on bottom-right
                     Positioned(
-                      top: -4,
-                      left: -4,
-                      child: FavoriteButton(item: item, size: 24),
-                    ),
-                    Positioned(
-                      bottom: -2,
-                      right: -2,
-                      child: _AddButton(onTap: addToCart),
+                      bottom: -4,
+                      right: -4,
+                      child: GestureDetector(
+                        onTap: addToCart,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFE51926),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0x55E51926),
+                                offset: Offset(0, 4),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -569,85 +651,94 @@ class CategoryHeroCard extends StatelessWidget {
     }
     return 'Fresh from the Mr. Pizza kitchen';
   }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Container(
-      height: 132,
-      margin: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+      height: 140,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        color: const Color(0xFF141923),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: const [
           BoxShadow(
-            color: AppColors.shadow,
-            blurRadius: 10,
-            offset: Offset(0, 5),
+            color: Color(0x33000000),
+            offset: Offset(0, 8),
+            blurRadius: 18,
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(28),
         child: Stack(
           children: [
-            Image.network(
-              bannerImageUrl,
-              width: double.infinity,
-              height: 132,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) =>
-                  Container(color: AppColors.primaryDark),
+            // Right Side Pizza Cutout Image
+            Positioned(
+              right: -24,
+              top: -12,
+              bottom: -12,
+              child: Image.network(
+                bannerImageUrl,
+                width: 175,
+                height: 175,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    Image.asset('assets/images/banner_deal.jpg', fit: BoxFit.cover),
+              ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.bannerScrim.withValues(alpha: 0.92),
-                    AppColors.bannerScrim.withValues(alpha: 0.55),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  stops: const [0, 0.55, 1],
+            // Gradient Fader over image
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF141923),
+                      Color(0xFF141923),
+                      Colors.transparent,
+                    ],
+                    stops: [0.0, 0.58, 1.0],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
                 ),
               ),
             ),
+            // Text Content on Left
             Positioned(
-              left: 18,
+              left: 20,
               top: 0,
               bottom: 0,
-              right: 18,
+              right: 140,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.goldTint,
+                      color: const Color(0xFFE51926),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       category.name.toUpperCase(),
                       style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        color: Color(0xFF7A5414),
+                        fontFamily: 'PlusJakartaSans',
+                        color: Colors.white,
                         fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.3,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
                     categoryTagline,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
                       color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      shadows: const [
-                        Shadow(color: Colors.black45, blurRadius: 6),
-                      ],
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.4,
+                      height: 1.18,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -782,86 +873,148 @@ class CartFloatingBar extends ConsumerWidget {
     if (cart.items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       child: Container(
-        height: 62,
-        padding: const EdgeInsets.all(6),
+        height: 68,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.surfaceDark,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+          color: const Color(0xFFF0F3F8),
+          borderRadius: BorderRadius.circular(34),
           boxShadow: const [
             BoxShadow(
-              color: AppColors.overlay,
-              blurRadius: 24,
-              offset: Offset(0, 12),
+              color: Colors.white,
+              offset: Offset(-5, -5),
+              blurRadius: 12,
+            ),
+            BoxShadow(
+              color: Color(0x35A6B4C9),
+              offset: Offset(5, 5),
+              blurRadius: 14,
             ),
           ],
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '${cart.totalItemCount}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+            // Shopping Bag Icon with Red Count Badge
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5EBF3),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        offset: const Offset(1, 1),
+                        blurRadius: 3,
+                      ),
+                      const BoxShadow(
+                        color: Colors.white,
+                        offset: Offset(-1, -1),
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.shopping_bag_outlined,
+                    color: Color(0xFF141923),
+                    size: 22,
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: -4,
+                  right: -4,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE51926),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${cart.totalItemCount}',
+                      style: const TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
+
+            // Price Details: TOTAL PRICE label & Rs. value
             Expanded(
-              child: Text(
-                'Rs. ${cart.subtotal.toInt()}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'TOTAL PRICE',
+                    style: TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: Color(0xFF758295),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rs. ${cart.subtotal.toInt()}',
+                    style: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      color: Color(0xFF141923),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
               ),
             ),
+
+            // Red CHECKOUT -> Capsule CTA Button
             GestureDetector(
               onTap: onTap,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(18, 12, 6, 12),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: const Color(0xFFE51926),
                   borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x4DE51926),
+                      offset: Offset(0, 4),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
-                child: Row(
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Checkout',
+                    Text(
+                      'CHECKOUT',
                       style: TextStyle(
-                        fontFamily: AppTheme.fontFamily,
+                        fontFamily: 'PlusJakartaSans',
                         color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.arrow_forward_rounded,
-                        color: AppColors.primary,
-                        size: 15,
-                      ),
+                    SizedBox(width: 6),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                      size: 16,
                     ),
                   ],
                 ),

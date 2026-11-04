@@ -2,9 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mrpizza/core/theme/app_theme.dart';
+import 'package:mrpizza/features/auth/data/auth_repository.dart';
+import 'package:mrpizza/features/auth/providers/auth_provider.dart';
 import 'package:mrpizza/features/rider/data/rider_repository.dart';
 import 'package:mrpizza/features/rider/models/rider_delivery.dart';
 import 'package:mrpizza/features/rider/screens/rider_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// A signed-in session so [currentUserIdProvider] never touches the global
+/// Supabase client, which is not initialised in a unit test.
+class _SignedInAuthRepository extends AuthRepository {
+  @override
+  Session? get currentSession => Session(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        tokenType: 'bearer',
+        user: const User(
+          id: 'rider-uuid',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-09-28T10:00:00Z',
+          email: 'rider@test.com',
+        ),
+      );
+
+  @override
+  Stream<AuthState> get onAuthStateChange => const Stream<AuthState>.empty();
+}
 
 class _FakeRiderRepository extends RiderRepository {
   _FakeRiderRepository({this.details, this.deliveries = const []});
@@ -19,6 +44,8 @@ class _FakeRiderRepository extends RiderRepository {
   @override
   Stream<List<RiderDelivery>> streamDeliveries({
     Duration safetyNetPollInterval = riderSafetyNetPollInterval,
+    Duration firstReadRetryDelay = riderFirstReadRetryDelay,
+    int firstReadMaxAttempts = riderFirstReadMaxAttempts,
   }) =>
       Stream<List<RiderDelivery>>.value(deliveries);
 
@@ -71,19 +98,30 @@ RiderDelivery _delivery({
     );
 
 Widget _app(_FakeRiderRepository repository) => ProviderScope(
-      overrides: [riderRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        riderRepositoryProvider.overrideWithValue(repository),
+        authStateProvider
+            .overrideWith((ref) => AuthNotifier(_SignedInAuthRepository())),
+      ],
       child: MaterialApp(
         theme: AppTheme.light,
         home: const RiderScreen(),
       ),
     );
 
+/// The auth notifier arms a 500ms startup safety-net timer, so the tree is
+/// pumped past it or the test ends with a pending timer.
+Future<void> _settle(WidgetTester tester, Widget app) async {
+  await tester.pumpWidget(app);
+  await tester.pump(const Duration(milliseconds: 600));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
       'a rider with no record is told to contact the branch, not shown a blank screen',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(details: null)));
-    await tester.pumpAndSettle();
+    await _settle(tester, _app(_FakeRiderRepository(details: null)));
 
     expect(find.textContaining('not set up'), findsOneWidget);
     expect(find.textContaining('No deliveries waiting'), findsNothing);
@@ -92,19 +130,19 @@ void main() {
 
   testWidgets('an available rider with no work sees the empty state',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(details: _details)));
-    await tester.pumpAndSettle();
+    await _settle(tester, _app(_FakeRiderRepository(details: _details)));
 
     expect(find.textContaining('No deliveries waiting'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('a pending offer shows accept and decline', (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [_delivery(status: 'assigned')],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [_delivery(status: 'assigned')],
+        )));
 
     expect(find.text('Accept'), findsOneWidget);
     expect(find.text('Decline'), findsOneWidget);
@@ -113,11 +151,12 @@ void main() {
 
   testWidgets('an accepted job shows the customer, address and pickup button',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [_delivery(status: 'accepted')],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [_delivery(status: 'accepted')],
+        )));
 
     expect(find.text('Usama Khan'), findsOneWidget);
     expect(find.text('Mandian, Abbottabad'), findsOneWidget);
@@ -128,11 +167,12 @@ void main() {
   });
 
   testWidgets('a picked up job offers completion, not pickup', (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [_delivery(status: 'picked_up')],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [_delivery(status: 'picked_up')],
+        )));
 
     expect(find.text('Mark Delivered'), findsOneWidget);
     expect(find.text("I've Picked Up"), findsNothing);
@@ -141,20 +181,21 @@ void main() {
 
   testWidgets('an old order with no snapshot says so instead of showing blanks',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [
-        _delivery(
-          status: 'accepted',
-          customerName: null,
-          customerPhone: null,
-          deliveryAddress: null,
-          latitude: null,
-          longitude: null,
-        )
-      ],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [
+            _delivery(
+              status: 'accepted',
+              customerName: null,
+              customerPhone: null,
+              deliveryAddress: null,
+              latitude: null,
+              longitude: null,
+            )
+          ],
+        )));
 
     expect(find.textContaining('Contact details unavailable'), findsOneWidget);
     expect(find.text('Call'), findsNothing);
@@ -164,14 +205,17 @@ void main() {
 
   testWidgets('the dashboard shows the completed count and no money figure',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [
-        _delivery(
-            status: 'delivered', id: 'd1', deliveredAt: '2026-09-28T12:00:00Z')
-      ],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [
+            _delivery(
+                status: 'delivered',
+                id: 'd1',
+                deliveredAt: '2026-09-28T12:00:00Z')
+          ],
+        )));
 
     expect(find.text('1'), findsOneWidget);
     // Riders are paid a monthly salary by the branch, so the app must not
@@ -184,14 +228,17 @@ void main() {
 
   testWidgets('a recent delivery opens its order details when tapped',
       (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(
-      details: _details,
-      deliveries: [
-        _delivery(
-            status: 'delivered', id: 'd1', deliveredAt: '2026-09-28T12:00:00Z')
-      ],
-    )));
-    await tester.pumpAndSettle();
+    await _settle(
+        tester,
+        _app(_FakeRiderRepository(
+          details: _details,
+          deliveries: [
+            _delivery(
+                status: 'delivered',
+                id: 'd1',
+                deliveredAt: '2026-09-28T12:00:00Z')
+          ],
+        )));
 
     expect(find.text('Mandian, Abbottabad'), findsNothing);
 
@@ -205,8 +252,7 @@ void main() {
   });
 
   testWidgets('no availability toggle is offered to the rider', (tester) async {
-    await tester.pumpWidget(_app(_FakeRiderRepository(details: _details)));
-    await tester.pumpAndSettle();
+    await _settle(tester, _app(_FakeRiderRepository(details: _details)));
 
     expect(find.text('Go Online'), findsNothing);
     expect(find.text('Go Offline'), findsNothing);
@@ -221,11 +267,14 @@ void main() {
       overrides: [
         riderRepositoryProvider
             .overrideWith((ref) => _ThrowingRiderRepository()),
+        authStateProvider
+            .overrideWith((ref) => AuthNotifier(_SignedInAuthRepository())),
       ],
     );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(
+    await _settle(
+      tester,
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
@@ -234,7 +283,6 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
 
     expect(find.textContaining('Could not load'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);

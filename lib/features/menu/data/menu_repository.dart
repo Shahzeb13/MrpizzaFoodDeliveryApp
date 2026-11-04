@@ -33,6 +33,31 @@ class MenuRepository {
     );
   }
 
+  /// Live rows for exactly the cart's `menu_items` ids.
+  ///
+  /// Used by the checkout-time revalidation. Return value maps the `menu_items`
+  /// id to the row. An id missing from the map means the item is gone from the
+  /// sale: the row was deleted or `is_available` was switched off (anon read
+  /// access already hides unavailable rows).
+  Future<Map<String, MenuItem>> fetchAvailableItemsByIds(
+    Set<String> ids,
+  ) async {
+    final wanted = ids.where((id) => id.trim().isNotEmpty).toSet();
+    if (wanted.isEmpty) return const {};
+
+    final rows = await supabase
+        .from('menu_items')
+        .select('*, categories(id, name, sort_order)')
+        .inFilter('id', wanted.toList());
+
+    final live = <String, MenuItem>{};
+    for (final row in (rows as List).whereType<Map<String, dynamic>>()) {
+      final item = MenuItem.fromMap(row);
+      live[item.id] = item;
+    }
+    return live;
+  }
+
   /// Base URL that relative `image_url` values are resolved against.
   ///
   /// Rows written before the Cloudinary migration store a bare path such as

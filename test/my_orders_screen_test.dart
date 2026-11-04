@@ -88,7 +88,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Cancelled'), findsOneWidget);
+    expect(find.text('CANCELLED'), findsOneWidget);
   });
 
   testWidgets('a status change arrives without the customer re-opening',
@@ -99,8 +99,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Preparing in the kitchen'), findsOneWidget);
-    expect(find.text('IN PROGRESS'), findsOneWidget);
+    expect(find.text('PREPARING IN THE KITCHEN'), findsOneWidget);
 
     // The branch cancels it while the customer is still looking at the list.
     updates.add([summaryWithStatus(orderId, 'cancelled')]);
@@ -108,13 +107,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     // Same screen, no refresh, no pull-to-refresh.
-    expect(find.text('Cancelled'), findsOneWidget);
-    expect(find.text('Preparing in the kitchen'), findsNothing);
+    expect(find.text('CANCELLED'), findsOneWidget);
+    expect(find.text('PREPARING IN THE KITCHEN'), findsNothing);
 
     // And the row stops advertising itself as trackable, because a cancelled
-    // order is no longer in flight. A card that still said "In progress" over a
+    // order is no longer in flight. A card that still said "Track Order" over a
     // cancelled order would be the same lie one field over.
-    expect(find.text('IN PROGRESS'), findsNothing);
     expect(find.text('View Order'), findsOneWidget);
     expect(find.text('Track Order'), findsNothing);
   });
@@ -132,7 +130,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Delivered'), findsOneWidget);
+    expect(find.text('DELIVERED'), findsOneWidget);
     expect(find.text('MP-ABT-00042'), findsOneWidget);
     expect(find.text('2x Chicken Tikka Supreme'), findsOneWidget);
   });
@@ -150,7 +148,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Ready for pickup'), findsOneWidget);
+    expect(find.text('READY FOR PICKUP'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

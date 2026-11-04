@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,8 @@ import '../../../core/theme/widgets.dart';
 import '../../../widgets/shared_components.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../location/screens/map_location_picker_sheet.dart';
+import '../../menu/data/cart_revalidation.dart';
+import '../../menu/models/menu_item.dart';
 import '../../menu/providers/menu_provider.dart';
 import '../../loyalty/data/loyalty_repository.dart';
 import '../../loyalty/models/loyalty.dart';
@@ -66,6 +70,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncCheckout();
+      if (mounted) unawaited(_revalidateCartAgainstLiveMenu());
     });
   }
 
@@ -94,7 +99,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (checkout.orderType == OrderType.pickup) {
       if (checkout.branch == null && branches.isNotEmpty) {
-        notifier.selectBranchAutomatically(branches.first);
+        // The branch the customer picked by hand last time wins; the automatic
+        // first-branch pick remains the fallback for everyone else.
+        final rememberedId = CheckoutNotifier.rememberedManualBranchId();
+        final remembered = rememberedId == null
+            ? null
+            : branches.where((b) => b.id == rememberedId).firstOrNull;
+        if (remembered != null) {
+          notifier.selectBranch(remembered);
+        } else {
+          notifier.selectBranchAutomatically(branches.first);
+        }
       }
       return;
     }
@@ -105,6 +120,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       notifier.selectAddress(checkout.address!, branches: branches);
     } else if (checkout.address == null) {
       notifier.selectDeliveryDefault(addresses: addresses, branches: branches);
+    }
+  }
+
+  /// Checks the cart against the live menu and repairs it before the customer
+  /// reads totals that may no longer exist.
+  ///
+  /// Best-effort by design: a network failure only skips the polish, it never
+  /// blocks the way to payment — the server still re-checks the order for real
+  /// when it is placed.
+  Future<void> _revalidateCartAgainstLiveMenu() async {
+    final cart = ref.read(cartProvider);
+    if (cart.isEmpty) return;
+
+    final Map<String, MenuItem> availableItems;
+    try {
+      availableItems = await ref
+          .read(menuRepositoryProvider)
+          .fetchAvailableItemsByIds(
+            cart.items.map((line) => line.item.id).toSet(),
+          );
+    } catch (_) {
+      return;
+    }
+
+    final result = revalidateCartAgainstMenu(
+      items: cart.items,
+      availableItems: availableItems,
+    );
+    if (!mounted || !result.hasChanges) return;
+
+    ref.read(cartProvider.notifier).replaceCartItems(result.adjustedItems);
+    final message = cartRevalidationMessage(result);
+    if (message != null) {
+      _showMessage(message);
     }
   }
 

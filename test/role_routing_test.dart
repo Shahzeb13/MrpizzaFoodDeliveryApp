@@ -90,14 +90,14 @@ void main() {
   });
 
   group('the route guard blocks the wrong panel', () {
-    test('a signed-out visitor is sent to login from any app screen', () {
+    test('a signed-out visitor is sent to login from a checkout screen', () {
       expect(
         resolveAuthorizedLocation(
           isAuthenticated: false,
           role: UserRole.customer,
-          requestedLocation: customerLandingLocation,
+          requestedLocation: checkoutLocation,
         ),
-        loginLocation,
+        '$loginLocation?return=${Uri.encodeComponent(checkoutLocation)}',
       );
     });
 

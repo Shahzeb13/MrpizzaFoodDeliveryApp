@@ -1,8 +1,33 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mrpizza/features/auth/data/auth_repository.dart';
+import 'package:mrpizza/features/auth/providers/auth_provider.dart';
 import 'package:mrpizza/features/rider/data/rider_repository.dart';
 import 'package:mrpizza/features/rider/models/rider_delivery.dart';
 import 'package:mrpizza/features/rider/providers/rider_providers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// A signed-in session so [currentUserIdProvider] never touches the global
+/// Supabase client, which is not initialised in a unit test.
+class _SignedInAuthRepository extends AuthRepository {
+  @override
+  Session? get currentSession => Session(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        tokenType: 'bearer',
+        user: const User(
+          id: 'rider-uuid',
+          appMetadata: {},
+          userMetadata: {},
+          aud: 'authenticated',
+          createdAt: '2026-09-28T10:00:00Z',
+          email: 'rider@test.com',
+        ),
+      );
+
+  @override
+  Stream<AuthState> get onAuthStateChange => const Stream<AuthState>.empty();
+}
 
 class _FakeRiderRepository extends RiderRepository {
   _FakeRiderRepository({
@@ -20,6 +45,8 @@ class _FakeRiderRepository extends RiderRepository {
   @override
   Stream<List<RiderDelivery>> streamDeliveries({
     Duration safetyNetPollInterval = riderSafetyNetPollInterval,
+    Duration firstReadRetryDelay = riderFirstReadRetryDelay,
+    int firstReadMaxAttempts = riderFirstReadMaxAttempts,
   }) =>
       Stream<List<RiderDelivery>>.value(const <RiderDelivery>[]);
 
@@ -54,7 +81,11 @@ const _setUp = RiderDetails(
 
 ProviderContainer _container(_FakeRiderRepository repository) {
   final container = ProviderContainer(
-    overrides: [riderRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      riderRepositoryProvider.overrideWithValue(repository),
+      authStateProvider
+          .overrideWith((ref) => AuthNotifier(_SignedInAuthRepository())),
+    ],
   );
   addTearDown(container.dispose);
   return container;

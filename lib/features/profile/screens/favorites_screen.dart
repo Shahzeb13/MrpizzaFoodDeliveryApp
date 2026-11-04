@@ -2,20 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/widgets.dart';
+import '../../../core/theme/neumorphic.dart';
 import '../../../widgets/shared_components.dart';
 import '../../menu/data/menu_repository.dart';
 import '../../menu/models/menu_item.dart';
 import '../../menu/providers/menu_provider.dart';
 
-/// The customer's saved dishes.
-///
-/// Reads two things and needs both before it can draw anything: the saved ids
-/// from the `favorites` table, and the live menu catalog to turn those ids into
-/// dishes. A saved id with no matching catalog item is dropped rather than shown
-/// as a blank row, because that item is off the menu and the customer cannot
-/// order it.
+/// The customer's saved dishes matching Batch 3 Image 2.
 class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
 
@@ -25,18 +18,38 @@ class FavoritesScreen extends ConsumerWidget {
     final catalogAsync = ref.watch(menuCatalogProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: NeuColors.background,
       appBar: AppBar(
-        title: const Text('My Favourites'),
-        backgroundColor: AppColors.surface,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          // The app is go_router, so popping the route is the way back rather
-          // than Navigator.pop, which would have no route to pop against.
-          onPressed: () => context.pop(),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'My Favourites',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: NeuColors.textPrimary,
+            letterSpacing: -0.4,
+          ),
+        ),
+        leading: Center(
+          child: NeuCircleButton(
+            size: 40,
+            onPressed: () => context.pop(),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 16,
+              color: NeuColors.textPrimary,
+            ),
+          ),
         ),
       ),
-      body: _buildBody(context, ref, favoritesAsync, catalogAsync),
+      body: Stack(
+        children: [
+          _buildBody(context, ref, favoritesAsync, catalogAsync),
+        ],
+      ),
     );
   }
 
@@ -46,11 +59,10 @@ class FavoritesScreen extends ConsumerWidget {
     AsyncValue<List<String>> favoritesAsync,
     AsyncValue<dynamic> catalogAsync,
   ) {
-    // While either read is in flight the list is genuinely unknown. Rendering
-    // the empty state now flashed "no favourites" at every customer on every
-    // visit, which reads as "your saved dishes are gone".
     if (favoritesAsync.isLoading || catalogAsync.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(color: NeuColors.primary),
+      );
     }
 
     if (favoritesAsync.hasError) {
@@ -100,20 +112,24 @@ class FavoritesScreen extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const MrIconWell(
-              icon: Icons.wifi_off_rounded,
-              color: AppColors.textSecondary,
-              background: AppColors.sand,
-              size: 28,
+            NeuInset(
+              borderRadius: 30,
+              padding: const EdgeInsets.all(16),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                color: NeuColors.textSecondary,
+                size: 28,
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               title,
               textAlign: TextAlign.center,
               style: const TextStyle(
+                fontFamily: 'PlusJakartaSans',
                 fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+                color: NeuColors.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
@@ -122,11 +138,11 @@ class FavoritesScreen extends ConsumerWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: NeuColors.textSecondary,
               ),
             ),
             const SizedBox(height: 16),
-            OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
+            TextButton(onPressed: onRetry, child: const Text('Try again')),
           ],
         ),
       ),
@@ -134,8 +150,7 @@ class FavoritesScreen extends ConsumerWidget {
   }
 }
 
-/// One saved dish: picture, name, price, and the two actions a returning
-/// customer actually wants — put it back in the cart, or stop saving it.
+/// One saved dish with Neumorphic card styling.
 class _FavoriteRow extends ConsumerWidget {
   final MenuItem item;
 
@@ -145,12 +160,11 @@ class _FavoriteRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isSaved = isFavorite(ref.watch(favoritesProvider), item.id);
 
-    return MrCard(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: NeuCard(
+        padding: const EdgeInsets.all(12),
+        borderRadius: 22,
         onTap: () => showModalBottomSheet(
           context: context,
           isScrollControlled: true,
@@ -159,23 +173,23 @@ class _FavoriteRow extends ConsumerWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: Image.network(
-                // Through the resolver, like every other dish image, so a
-                // relative path from before the Cloudinary migration still
-                // loads instead of showing a broken frame.
-                MenuRepository.resolveItemImage(item),
-                width: 76,
-                height: 76,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 76,
-                  height: 76,
-                  color: AppColors.sand,
-                  child: const Center(
-                    child:
-                        Icon(Icons.local_pizza_rounded, size: 28, color: AppColors.textLight),
+            NeuInset(
+              borderRadius: 16,
+              padding: const EdgeInsets.all(4),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  MenuRepository.resolveItemImage(item),
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 72,
+                    height: 72,
+                    color: NeuColors.sand,
+                    child: const Center(
+                      child: Text('🍕', style: TextStyle(fontSize: 26)),
+                    ),
                   ),
                 ),
               ),
@@ -187,33 +201,45 @@ class _FavoriteRow extends ConsumerWidget {
                 children: [
                   Text(
                     item.title,
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: NeuColors.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     item.categoryName,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: NeuColors.textSecondary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 8),
-                  MrPriceText(item.basePrice, fontSize: 15),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Rs. ${item.basePrice.toInt()}',
+                    style: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: NeuColors.primary,
+                    ),
+                  ),
                 ],
               ),
             ),
             Column(
               children: [
-                IconButton(
-                  icon: Icon(
-                    isSaved
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    color:
-                        isSaved ? AppColors.primary : AppColors.textSecondary,
-                    size: 22,
-                  ),
+                NeuCircleButton(
+                  size: 36,
                   onPressed: () async {
                     try {
                       await ref
@@ -221,13 +247,18 @@ class _FavoriteRow extends ConsumerWidget {
                           .toggleFavorite(item.id);
                     } catch (_) {
                       if (!context.mounted) return;
-                      showTopCartToast(
-                          context, 'Could not update favourites.');
+                      showTopCartToast(context, 'Could not update favourites.');
                     }
                   },
+                  child: Icon(
+                    isSaved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    color: isSaved ? NeuColors.primary : NeuColors.textSecondary,
+                    size: 19,
+                  ),
                 ),
-                ElevatedButton(
-                  onPressed: () {
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
                     ref.read(cartProvider.notifier).addItem(
                           item: item,
                           size: PizzaSize.medium,
@@ -235,15 +266,32 @@ class _FavoriteRow extends ConsumerWidget {
                           toppings: [],
                           quantity: 1,
                         );
-                    showTopCartToast(
-                        context, 'Added ${item.title} to cart!');
+                    showTopCartToast(context, 'Added ${item.title} to cart!');
                   },
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 38),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: NeuColors.primary,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x4DE51926),
+                          blurRadius: 6,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Text(
+                      'Add',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  child: const Text('Add'),
                 ),
               ],
             ),
@@ -254,37 +302,123 @@ class _FavoriteRow extends ConsumerWidget {
   }
 }
 
+/// The empty state matching Batch 3 Image 2 with concentric circular debossed well and red heart.
 class _EmptyFavourites extends StatelessWidget {
   const _EmptyFavourites();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          MrIconWell(
-            icon: Icons.favorite_border_rounded,
-            color: AppColors.textSecondary,
-            background: AppColors.sand,
-            size: 28,
-          ),
-          SizedBox(height: 12),
-          Text(
-            'No Favourites Saved',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Outer raised / inner debossed well for heart
+            Container(
+              width: 150,
+              height: 150,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: NeuColors.background,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.white,
+                    offset: Offset(-6, -6),
+                    blurRadius: 16,
+                  ),
+                  BoxShadow(
+                    color: Color(0x28A6B4C9),
+                    offset: Offset(6, 6),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFE9EFF7),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        offset: const Offset(3, 3),
+                        blurRadius: 6,
+                      ),
+                      const BoxShadow(
+                        color: Colors.white,
+                        offset: Offset(-3, -3),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.favorite_outline_rounded,
+                      color: NeuColors.primary,
+                      size: 46,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'Tap the heart on any dish to save it here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-          ),
-        ],
+            const SizedBox(height: 32),
+            const Text(
+              'No Favourites Saved',
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: NeuColors.textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Tap the heart icon on any pizza to save it here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: NeuColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Primary Pill Button: Browse the menu
+            GestureDetector(
+              onTap: () => context.go('/home'),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                decoration: BoxDecoration(
+                  color: NeuColors.primary,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x66E51926),
+                      blurRadius: 14,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Text(
+                  'Browse the menu',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

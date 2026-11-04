@@ -14,7 +14,9 @@ const _failureUrl = 'https://mrpizzapak.com/payment/failure';
 const _ipnUrl =
     'https://eytsownrsujphibqpimt.supabase.co/functions/v1/payfast-ipn';
 
-const _isUat = true; // flip to false together with PAYFAST_ENV=live on the backend
+// Live PayFast (Bank Alfalah IPG). The card form posts to ipg1; payfast-token
+// must hand back a token minted by the same live URL or the gateway rejects us.
+const _isUat = false;
 
 /// What the customer did in the payment page.
 enum PayfastOutcome {

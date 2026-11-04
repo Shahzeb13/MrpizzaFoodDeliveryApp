@@ -5,6 +5,7 @@ import '../../features/auth/providers/auth_provider.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/role_select_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
+import '../../features/auth/screens/forgot_password_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/menu/screens/menu_screen.dart';
 import '../../features/orders/screens/my_orders_screen.dart';
@@ -29,40 +30,56 @@ import '../../features/rider/screens/rider_screen.dart';
 /// Where the app opens for a given session.
 ///
 /// A signed-in user starts on the panel their `profiles.role` row selects, so
-/// a rider never lands in the customer app. Exposed as a function rather than
-/// inlined so the rule is checkable on its own.
+/// a rider never lands in the customer panel. A signed-out visitor starts on
+/// the store front rather than the login screen: the menu is browsable without
+/// an account, and login is asked only when a screen needs one.
 String initialLocationForSession({
   required bool isAuthenticated,
   required UserRole role,
 }) =>
-    isAuthenticated ? landingLocationForRole(role) : loginLocation;
+    isAuthenticated ? landingLocationForRole(role) : customerLandingLocation;
 
-/// Auth- and role-driven router. Navigation from login, post-signup redirect,
-/// and token-expiry sign-out all flow through this one place instead of
-/// per-screen checks.
+/// Auth- and role-driven router.
 ///
-/// The starting location is the panel the `profiles.role` column selects, and
-/// [resolveAuthorizedLocation] re-checks the live session on every navigation
-/// so a rider cannot be shown the customer panel, or vice versa.
+/// The GoRouter below is created exactly once, and the login/signup redirect
+/// and post-signup resume all flow through the single `redirect` callback it
+/// owns (`resolveAuthorizedLocation`, which re-reads the live session on every
+/// navigation). Re-creating the whole router on each auth flip — the previous
+/// mechanism — restarted navigation at the landing panel, which by design
+/// cannot honour a "return to checkout" target carried in a query parameter.
+///
+/// Instead, auth and role changes mark the router stale, and `refresh()` makes
+/// the guard re-run for whatever screen is open at that moment:
+/// - sign-in on `/login?return=/checkout` resumes the checkout, or lands on
+///   the role's panel when there is nothing to resume;
+/// - token expiry on a protected screen re-routes to login with the screen
+///   carried along as the new `?return=`;
+/// - sign-out on the menu simply keeps browsing as a guest.
 final routerProvider = Provider<GoRouter>((ref) {
-  final isAuthenticated = ref.watch(
-    authStateProvider.select((s) => s.isAuthenticated && !s.isLoading),
-  );
-  final role = ref.watch(roleProvider).value ?? UserRole.customer;
+  // Read once, at first watch. AuthGate mounts the router only after the
+  // startup session and role lookups have settled, so these values describe
+  // the first frame truthfully; every later change flows through refresh().
+  final startupAuth = ref.read(authStateProvider);
+  final startupRole = ref.read(roleProvider).value ?? UserRole.customer;
 
   final router = GoRouter(
     initialLocation: initialLocationForSession(
-      isAuthenticated: isAuthenticated,
-      role: role,
+      isAuthenticated:
+          startupAuth.isAuthenticated && !startupAuth.isLoading,
+      role: startupRole,
     ),
     redirect: (context, state) {
-      // Read live values rather than the captured ones: the router can outlive
-      // a provider change, and the guard must reflect the current session.
+      // Read live values rather than the captured ones: this closure outlives
+      // the frame it was built for, and the guard must reflect the current
+      // session on every navigation.
       final auth = ref.read(authStateProvider);
+      final roleState = ref.read(roleProvider);
       return resolveAuthorizedLocation(
         isAuthenticated: auth.isAuthenticated && !auth.isLoading,
-        role: ref.read(roleProvider).value ?? UserRole.customer,
+        role: roleState.value ?? UserRole.customer,
+        isRoleLoading: roleState.isLoading,
         requestedLocation: state.matchedLocation,
+        returnTarget: state.uri.queryParameters['return'],
       );
     },
     routes: [
@@ -79,39 +96,43 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RoleSelectScreen(),
       ),
       GoRoute(
+        path: forgotPasswordLocation,
+        builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
         path: customerLandingLocation,
         builder: (context, state) => const HomeScreen(),
       ),
       GoRoute(
-        path: '/menu',
+        path: menuLocation,
         builder: (context, state) => const MenuScreen(),
       ),
       GoRoute(
-        path: '/orders/track',
+        path: trackOrderLocation,
         builder: (context, state) => const OrderTrackingScreen(),
       ),
       GoRoute(
-        path: '/my-orders',
+        path: myOrdersLocation,
         builder: (context, state) => const MyOrdersScreen(),
       ),
       GoRoute(
-        path: '/wallet',
+        path: walletLocation,
         builder: (context, state) => const WalletScreen(),
       ),
       GoRoute(
-        path: '/loyalty',
+        path: loyaltyLocation,
         builder: (context, state) => const LoyaltyPointsScreen(),
       ),
       GoRoute(
-        path: '/addresses',
+        path: addressesLocation,
         builder: (context, state) => const AddressesScreen(),
       ),
       GoRoute(
-        path: '/favorites',
+        path: favoritesLocation,
         builder: (context, state) => const FavoritesScreen(),
       ),
       GoRoute(
-        path: '/support',
+        path: supportCenterLocation,
         builder: (context, state) => const SupportCenterScreen(),
         routes: [
           // Policies and FAQs live on the website, so this route carries which
@@ -123,7 +144,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) =>
                 SupportDocument.fromSlug(state.pathParameters['document']) ==
                         null
-                    ? '/support'
+                    ? supportCenterLocation
                     : null,
             builder: (context, state) => SupportDocumentScreen(
               document: SupportDocument.fromSlug(
@@ -134,19 +155,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
-        path: '/delete-account',
+        path: deleteAccountLocation,
         builder: (context, state) => const AccountDeletionScreen(),
       ),
       GoRoute(
-        path: '/checkout',
+        path: checkoutLocation,
         builder: (context, state) => const CheckoutScreen(),
       ),
       GoRoute(
-        path: '/apply-discount',
+        path: applyDiscountLocation,
         builder: (context, state) => const ApplyDiscountScreen(),
       ),
       GoRoute(
-        path: '/payment-method',
+        path: paymentMethodLocation,
         builder: (context, state) => const PaymentMethodScreen(),
       ),
       GoRoute(
@@ -158,11 +179,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const RiderHistoryScreen(),
       ),
       GoRoute(
-        path: '/profile',
+        path: profileLocation,
         builder: (context, state) => const ProfileScreen(),
       ),
     ],
   );
+
+  // The one way navigation reacts to a session change: every auth or role
+  // event re-runs the guard for the screen currently open. Auth changes fire
+  // for token refreshes too, which only ever re-confirms an already-allowed
+  // screen, so the extra redirect pass is cheap and harmless.
+  void refreshNavigationAfterSessionChange() => router.refresh();
+  ref.listen(authStateProvider,
+      (_, __) => refreshNavigationAfterSessionChange());
+  ref.listen(roleProvider, (_, __) => refreshNavigationAfterSessionChange());
 
   ref.onDispose(router.dispose);
   return router;

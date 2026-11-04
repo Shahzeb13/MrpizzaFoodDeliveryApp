@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/supabase_client.dart';
@@ -18,6 +19,8 @@ class NotificationService {
   static final NotificationService instance = NotificationService._();
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
 
   StreamSubscription<AuthState>? _authSub;
   StreamSubscription<String>? _tokenRefreshSub;
@@ -36,6 +39,7 @@ class NotificationService {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     } catch (_) {}
 
+    await _initLocalNotifications();
     await _requestPermission();
 
     _authSub = supabase.auth.onAuthStateChange.listen((state) {
@@ -68,6 +72,7 @@ class NotificationService {
       if (kDebugMode) {
         debugPrint('FCM foreground message: ${message.messageId}');
       }
+      _showLocalNotification(message);
     });
 
     _onMessageOpenedSub?.cancel();
@@ -84,10 +89,93 @@ class NotificationService {
       }
     } catch (_) {}
 
+    try {
+      await _messaging.subscribeToTopic('all_users');
+    } catch (_) {}
+
     final sessionUser = supabase.auth.currentUser;
     if (sessionUser != null) {
       _currentUserId = sessionUser.id;
       _registerTokenForCurrentUser();
+    }
+  }
+
+  Future<void> _initLocalNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+    try {
+      await _localNotifications.initialize(initSettings);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Local notifications init error: $e');
+      }
+    }
+
+    const androidChannel = AndroidNotificationChannel(
+      'mrpizza_orders',
+      'Order Updates',
+      description: 'Notifications for order status updates',
+      importance: Importance.high,
+    );
+    const dealsChannel = AndroidNotificationChannel(
+      'mrpizza_deals',
+      'Deals & Offers',
+      description: 'Notifications for deals, offers and new menu items',
+      importance: Importance.high,
+    );
+    try {
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(androidChannel);
+      await androidPlugin?.createNotificationChannel(dealsChannel);
+    } catch (_) {}
+  }
+
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    final title = notification?.title ?? message.data['title']?.toString() ?? 'Mr. Pizza';
+    final body = notification?.body ?? message.data['body']?.toString() ?? '';
+    final type = message.data['type']?.toString() ?? '';
+
+    String channelId = 'mrpizza_orders';
+    String channelName = 'Order Updates';
+    String channelDesc = 'Notifications for order status updates';
+    if (type == 'deal' || type == 'offer' || type == 'menu' || type == 'promo') {
+      channelId = 'mrpizza_deals';
+      channelName = 'Deals & Offers';
+      channelDesc = 'Notifications for deals, offers and new menu items';
+    }
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription: channelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const iosDetails = DarwinNotificationDetails();
+    final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    try {
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        details,
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('Local notification show error: $e');
+      }
     }
   }
 
@@ -106,6 +194,13 @@ class NotificationService {
           badge: true,
           sound: true,
         );
+        // Android 13+ - also request via local notifications if needed
+        try {
+          await _localNotifications
+              .resolvePlatformSpecificImplementation<
+                  AndroidFlutterLocalNotificationsPlugin>()
+              ?.requestNotificationsPermission();
+        } catch (_) {}
       }
     } catch (e) {
       if (kDebugMode) {

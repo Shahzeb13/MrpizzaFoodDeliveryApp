@@ -164,6 +164,30 @@ int _asInt(Object? value) {
   return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
+/// Reads back a persisted [PizzaSize]. The constant name is stored because it
+/// survives a marketing wording change that would leave saved carts with a
+/// size no current label matches.
+PizzaSize? _pizzaSizeFromStored(String? stored) {
+  final value = stored?.trim() ?? '';
+  for (final candidate in PizzaSize.values) {
+    if (value == candidate.toString() || value == candidate.name) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+/// Reads back a persisted [PizzaCrust]; same stability rule as the size.
+PizzaCrust? _pizzaCrustFromStored(String? stored) {
+  final value = stored?.trim() ?? '';
+  for (final candidate in PizzaCrust.values) {
+    if (value == candidate.toString() || value == candidate.name) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 class CartItem {
   final String id;
   final MenuItem item;
@@ -183,6 +207,113 @@ class CartItem {
     this.specialInstructions,
   });
 
+  /// The line's identity: the same item, size, crust and topping set merged
+  /// into one line. Both [CartNotifier.addItem] and restoring a saved cart go
+  /// through this so a restored line still merges with the one the item sheet
+  /// adds next.
+  static String lineIdentity(
+    String menuItemId,
+    PizzaSize size,
+    PizzaCrust crust,
+    List<ToppingOption> toppings,
+  ) {
+    return '${menuItemId}_${size.name}_${crust.name}_${toppings.map((t) => t.name).join('_')}';
+  }
+
+  /// Cart-shaped storage record for session persistence. Only what the cart
+  /// needs is kept: rebuilding the item's full detail from the database is the
+  /// checkout-time revalidation's job, not storage's.
+  Map<String, dynamic> toStorageMap() => {
+        'item': {
+          'id': item.id,
+          'title': item.title,
+          'description': item.description,
+          'basePrice': item.basePrice,
+          'originalPrice': item.originalPrice,
+          'imageUrl': item.imageUrl,
+          'categoryId': item.categoryId,
+          'categoryName': item.categoryName,
+          'isVeg': item.isVeg,
+          'isSpicy': item.isSpicy,
+        },
+        'size': size.toString(),
+        'crust': crust.toString(),
+        'toppings': [
+          for (final topping in selectedToppings)
+            {
+              'name': topping.name,
+              'price': topping.price,
+              'icon': topping.icon,
+            },
+        ],
+        'quantity': quantity,
+        'instructions': specialInstructions,
+      };
+
+  /// Rebuilds a line from storage, or null when the record is unreadable
+  /// (renamed enum, corrupted JSON, …). A null simply leaves the line out;
+  /// one bad line must not empty the whole saved cart.
+  static CartItem? fromStorageMap(Map<String, dynamic> map) {
+    try {
+      final rawItem = map['item'];
+      if (rawItem is! Map<String, dynamic>) return null;
+
+      final sizeName = map['size']?.toString();
+      final crustName = map['crust']?.toString();
+      final size = _pizzaSizeFromStored(sizeName);
+      final crust = _pizzaCrustFromStored(crustName);
+      if (size == null || crust == null) return null;
+
+      final rawTopplings = map['toppings'];
+      final toppings = <ToppingOption>[
+        if (rawTopplings is List)
+          for (final raw in rawTopplings.whereType<Map<String, dynamic>>())
+            ToppingOption(
+              name: raw['name']?.toString() ?? '',
+              price: (raw['price'] as num?)?.toDouble() ?? 0,
+              icon: raw['icon']?.toString() ?? '',
+            ),
+      ];
+      if (toppings.any((t) => t.name.isEmpty)) return null;
+
+      final quantity = map['quantity'] is int ? map['quantity'] as int : null;
+      if (quantity == null || quantity < 1) return null;
+
+      final rawBasePrice = rawItem['basePrice'];
+      if (rawBasePrice is! num) return null;
+
+      final rawOriginalPrice = rawItem['originalPrice'];
+      final itemId = rawItem['id']?.toString() ?? '';
+      if (itemId.isEmpty) return null;
+
+      final item = MenuItem(
+        id: itemId,
+        title: rawItem['title']?.toString() ?? '',
+        description: rawItem['description']?.toString() ?? '',
+        basePrice: rawBasePrice.toDouble(),
+        originalPrice:
+            rawOriginalPrice is num ? rawOriginalPrice.toDouble() : null,
+        imageUrl: rawItem['imageUrl']?.toString() ?? '',
+        categoryId: rawItem['categoryId']?.toString(),
+        categoryName: rawItem['categoryName']?.toString() ?? '',
+        isVeg: rawItem['isVeg'] == true,
+        isSpicy: rawItem['isSpicy'] == true,
+      );
+
+      return CartItem(
+        id: lineIdentity(item.id, size, crust, toppings),
+        item: item,
+        size: size,
+        crust: crust,
+        selectedToppings: toppings,
+        quantity: quantity,
+        specialInstructions: map['instructions']?.toString(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   double get unitPrice {
     double price = item.basePrice * size.priceMultiplier + crust.extraPrice;
     for (final topping in selectedToppings) {
@@ -192,6 +323,20 @@ class CartItem {
   }
 
   double get totalPrice => unitPrice * quantity;
+
+  /// A rebuilt line keeps the stored [CartItem] shape but carries fresh item
+  /// data, which is how a repriced menu now shows through the cart.
+  CartItem withMenuItem(MenuItem freshItem) {
+    return CartItem(
+      id: lineIdentity(freshItem.id, size, crust, selectedToppings),
+      item: freshItem,
+      size: size,
+      crust: crust,
+      selectedToppings: selectedToppings,
+      quantity: quantity,
+      specialInstructions: specialInstructions,
+    );
+  }
 
   CartItem copyWith({
     int? quantity,

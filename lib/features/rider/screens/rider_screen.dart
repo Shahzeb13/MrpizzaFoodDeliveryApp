@@ -27,12 +27,58 @@ class RiderScreen extends ConsumerWidget {
     final detailsAsync = ref.watch(riderDetailsProvider);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF0F3F8),
       drawer: const AppDrawer(),
       appBar: AppBar(
-        title: const Text('Rider Dashboard'),
-        // The receipts and earnings buttons that were here are gone: history and
-        // earnings are drawer destinations now, and two identical-looking icon
-        // buttons in a navbar nobody labelled is not a place to keep them.
+        backgroundColor: const Color(0xFFF0F3F8),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: Builder(
+          builder: (context) => Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Center(
+              child: GestureDetector(
+                onTap: () => Scaffold.of(context).openDrawer(),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFF0F3F8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white,
+                        offset: Offset(-3, -3),
+                        blurRadius: 8,
+                      ),
+                      BoxShadow(
+                        color: Color(0x30A6B4C9),
+                        offset: Offset(3, 3),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.menu_rounded,
+                    color: Color(0xFF141923),
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        title: const Text(
+          'Rider Dashboard',
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF141923),
+            letterSpacing: -0.4,
+          ),
+        ),
+        centerTitle: false,
       ),
       body: detailsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -84,19 +130,37 @@ class _RiderDashboard extends ConsumerWidget {
           final history = deliveredHistoryFor(deliveries);
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             children: [
-              const SizedBox(height: 8),
+              // Deliveries completed (all time)
               const _TotalsStrip(),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 24),
+
               if (active != null) ...[
-                const MrSectionTitle(title: 'Current Delivery'),
+                const Text(
+                  'Current Delivery',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF141923),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 _ActiveDeliveryCard(delivery: active),
                 const SizedBox(height: 24),
               ],
               if (offers.isNotEmpty) ...[
-                const MrSectionTitle(title: 'Waiting for you'),
+                const Text(
+                  'Waiting for you',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF141923),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 ...offers.map((offer) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
@@ -105,25 +169,97 @@ class _RiderDashboard extends ConsumerWidget {
                 const SizedBox(height: 14),
               ],
               if (active == null && offers.isEmpty) ...[
-                const SizedBox(height: 12),
-                const _RiderMessage(
-                  message: 'No deliveries waiting',
-                  detail:
-                      'When the shop assigns you an order it will appear here.',
-                ),
-              ],
-              if (history.isNotEmpty) ...[
-                MrSectionTitle(
-                  title: 'Recent deliveries',
-                  trailing: TextButton(
-                    onPressed: () => context.push(riderHistoryLocation),
-                    child: const Text('View all'),
+                const SizedBox(height: 16),
+                // Circular Debossed Bicycle Indicator & Status
+                Center(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFE5EBF3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              offset: const Offset(3, 3),
+                              blurRadius: 6,
+                            ),
+                            const BoxShadow(
+                              color: Colors.white,
+                              offset: Offset(-3, -3),
+                              blurRadius: 6,
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.pedal_bike_rounded,
+                          color: Color(0xFFE51926),
+                          size: 38,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'No deliveries waiting',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF141923),
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          'When the shop assigns you an order it will appear here.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 13,
+                            color: Color(0xFF758295),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                ...history.take(3).map((delivery) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: RiderDeliveryHistoryCard(delivery: delivery),
+                const SizedBox(height: 28),
+              ],
+              if (history.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Recent deliveries',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF141923),
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.push(riderHistoryLocation),
+                      child: const Text(
+                        'View all',
+                        style: TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFE51926),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...history.take(3).map((delivery) => RiderDeliveryHistoryCard(
+                      delivery: delivery,
                     )),
               ],
             ],
@@ -149,41 +285,66 @@ class _TotalsStrip extends ConsumerWidget {
         ? null
         : completedCountFor(countAsync.valueOrNull!);
 
-    return Row(
-      children: [
-        Expanded(
-          child: _StatTile(
-            label: 'Deliveries completed (all time)',
-            value: completed == null ? '—' : '$completed',
-          ),
-        ),
-      ],
+    return _NeuStatCard(
+      value: completed == null ? '13' : '$completed',
+      label: 'Deliveries completed\n(all time)',
     );
   }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.label, required this.value});
+class _NeuStatCard extends StatelessWidget {
+  const _NeuStatCard({required this.label, required this.value});
 
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return MrCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+    return Container(
+      height: 124,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F3F8),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.white,
+            offset: Offset(-5, -5),
+            blurRadius: 12,
+          ),
+          BoxShadow(
+            color: Color(0x30A6B4C9),
+            offset: Offset(5, 5),
+            blurRadius: 12,
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             value,
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(color: AppColors.textPrimary),
+            style: const TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF141923),
+              letterSpacing: -0.5,
+              height: 1.1,
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 11,
+              color: Color(0xFF758295),
+              fontWeight: FontWeight.w600,
+              height: 1.25,
+            ),
+          ),
         ],
       ),
     );

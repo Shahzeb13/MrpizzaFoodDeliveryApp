@@ -132,121 +132,99 @@ class _AnimatedOrderStatusHeaderState extends State<AnimatedOrderStatusHeader>
         final lift = (curve.value - 1).abs() * 6;
         return Transform.translate(offset: Offset(0, lift), child: child);
       },
-      child: MrDoubleBezelShell(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tracking.billNumber ?? 'Order ${tracking.orderId}',
-                      style: const TextStyle(
-                        color: AppColors.accent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        fontFamily: AppTheme.fontFamily,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 420),
-                      switchInCurve: Curves.easeOutBack,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0, 0.35),
-                              end: Offset.zero,
-                            ).animate(animation),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Column(
-                        key: ValueKey<String>('${stage.name}-${tracking.status}'),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            stageHeadline(stage, tracking),
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(color: Colors.white),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            stageSubtitle(stage, tracking),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: AppColors.textLight),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (tracking.hasUnrecognisedStatus) ...[
-                      const SizedBox(height: 8),
-                      // Better to show the raw value than to place a status we
-                      // do not understand at the wrong point in the pipeline.
-                      Text(
-                        'Status: ${tracking.status}',
-                        style: const TextStyle(
-                          color: AppColors.accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          fontFamily: AppTheme.fontFamily,
-                        ),
+      child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141923),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x35000000),
+              offset: Offset(0, 8),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  tracking.billNumber ?? 'ABT-062',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                    fontFamily: 'PlusJakartaSans',
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE51926),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x55E51926),
+                        offset: Offset(0, 3),
+                        blurRadius: 8,
                       ),
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
+                  ),
+                  child: const Text(
                     'PLACED',
                     style: TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                      fontFamily: AppTheme.fontFamily,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    placedAt == null ? '--' : formatClockTime(placedAt),
-                    style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.4,
-                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.6,
+                      fontFamily: 'PlusJakartaSans',
                     ),
                   ),
-                  if (placedAt != null)
-                    Text(
-                      formatDayLabel(placedAt),
-                      style: const TextStyle(
-                        color: AppColors.textLight,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: AppTheme.fontFamily,
-                      ),
-                    ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (placedAt != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${formatClockTime(placedAt)} · ${formatDayLabel(placedAt)}',
+                  style: const TextStyle(
+                    color: Color(0xFF9EACB9),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'PlusJakartaSans',
+                  ),
+                ),
               ),
-            ],
-          ),
+            const SizedBox(height: 12),
+            Text(
+              stageHeadline(stage, tracking),
+              style: const TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: -0.6,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              stageSubtitle(stage, tracking),
+              style: const TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF9EACB9),
+                height: 1.35,
+              ),
+            ),
+          ],
         ),
       ),
     );

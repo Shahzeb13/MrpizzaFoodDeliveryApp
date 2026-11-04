@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers/role_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../widgets/shared_components.dart';
 import '../orders/models/order_tracking.dart';
 import '../orders/presentation/order_status_copy.dart';
 import '../orders/providers/live_order_provider.dart';
@@ -64,6 +66,21 @@ OrderSummary? findOrderInProgress(
 /// no recourse. A warning costs one extra tap for the rare customer who really
 /// does want two orders, and cannot lock anyone out.
 Future<void> startCheckoutGuarded(BuildContext context, WidgetRef ref) async {
+  final role = ref.read(roleProvider).valueOrNull;
+
+  // Rider accounts are delivery accounts: no profiles rows behind customer
+  // commerce (addresses, loyalty, payment methods), and the router sends a
+  // rider reaching /checkout back to the rider panel anyway. Explaining that
+  // where the tap happened is friendlier than a silent redirect.
+  if (role == UserRole.rider) {
+    showTopCartToast(
+      context,
+      'Rider accounts deliver orders. To buy food, please use a customer '
+      'account.',
+    );
+    return;
+  }
+
   final orders = ref.read(myOrdersProvider).value ?? const <OrderSummary>[];
   final inProgress = findOrderInProgress(orders, DateTime.now());
 

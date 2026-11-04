@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/neumorphic.dart';
 import '../../../widgets/shared_components.dart';
 import '../models/order_tracking.dart';
 import '../providers/live_order_provider.dart';
@@ -305,14 +306,18 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           decoration: BoxDecoration(
-            color: AppColors.surfaceDark,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: accent.withValues(alpha: 0.32)),
             boxShadow: const [
               BoxShadow(
-                color: AppColors.overlay,
-                blurRadius: 26,
-                offset: Offset(0, 12),
+                color: Colors.white,
+                offset: Offset(-5, -5),
+                blurRadius: 12,
+              ),
+              BoxShadow(
+                color: Color(0x35A6B4C9),
+                offset: Offset(5, 5),
+                blurRadius: 14,
               ),
             ],
           ),
@@ -340,7 +345,7 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontFamily: AppTheme.fontFamily,
-                            color: Colors.white,
+                            color: NeuColors.textDark,
                             fontWeight: FontWeight.w800,
                             fontSize: 15,
                             letterSpacing: -0.3,
@@ -351,9 +356,9 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
                           stageSubtitle(stage, tracking),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontFamily: AppTheme.fontFamily,
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: NeuColors.textMuted,
                             fontWeight: FontWeight.w500,
                             fontSize: 11.5,
                             height: 1.25,
@@ -367,7 +372,7 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
                   const SizedBox(width: 6),
                   const Icon(
                     Icons.chevron_right_rounded,
-                    color: Colors.white54,
+                    color: NeuColors.textMuted,
                     size: 20,
                   ),
                 ],
@@ -407,9 +412,8 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
       alignment: Alignment.centerRight,
       padding: const EdgeInsets.only(right: 28),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.22),
+        color: accent.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: accent.withValues(alpha: 0.32)),
       ),
       child: Icon(Icons.close_rounded, color: accent, size: 22),
     );
@@ -468,14 +472,26 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: NeuColors.insetBg,
         borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            offset: const Offset(1, 1),
+            blurRadius: 3,
+          ),
+          const BoxShadow(
+            color: Colors.white,
+            offset: Offset(-1, -1),
+            blurRadius: 3,
+          ),
+        ],
       ),
       child: Text(
         '#$billNumber',
         style: const TextStyle(
           fontFamily: AppTheme.fontFamily,
-          color: Colors.white70,
+          color: NeuColors.textSub,
           fontWeight: FontWeight.w700,
           fontSize: 11,
         ),
@@ -506,7 +522,7 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
         child: LinearProgressIndicator(
           value: value,
           minHeight: 4,
-          backgroundColor: Colors.white.withValues(alpha: 0.12),
+          backgroundColor: AppColors.sandDeep,
           valueColor: AlwaysStoppedAnimation<Color>(accent),
         ),
       ),
@@ -520,7 +536,7 @@ class _LiveOrderBarState extends ConsumerState<LiveOrderBar>
         TextButton(
           onPressed: () => dismissLiveOrderConclusion(ref, orderId),
           style: TextButton.styleFrom(
-            foregroundColor: Colors.white70,
+            foregroundColor: NeuColors.textSub,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             minimumSize: const Size(0, 34),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,

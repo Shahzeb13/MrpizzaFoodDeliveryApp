@@ -94,6 +94,12 @@ void main() {
   });
 
   testWidgets('logout is offered to both roles', (tester) async {
+    // The refactored drawer's header and footer are taller than the old one,
+    // so on the default 600px surface the Logout tile sits below the fold of
+    // the lazy ListView and is never built. Same surface the badge test uses.
+    await tester.binding.setSurfaceSize(const Size(400, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     for (final role in UserRole.values) {
       _currentApp = _app(role);
       await _settle(tester);

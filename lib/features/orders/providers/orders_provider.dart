@@ -1,5 +1,9 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../core/storage/local_storage.dart';
 import '../../menu/models/menu_item.dart';
 import '../../profile/models/profile.dart';
 import '../data/orders_repository.dart';
@@ -88,7 +92,67 @@ class CheckoutState {
 }
 
 class CheckoutNotifier extends StateNotifier<CheckoutState> {
-  CheckoutNotifier() : super(const CheckoutState());
+  CheckoutNotifier() : super(const CheckoutState()) {
+    _storeReady = LocalStore.instance.ready();
+  }
+
+  late final Future<SharedPreferences?> _storeReady;
+  bool _changedSinceBoot = false;
+
+  /// Keeps delivery/pickup and a hand-picked branch across app restarts, after
+  /// every change the customer (or the screen's default logic) settles on.
+  ///
+  /// Only a branch the customer actually chose is remembered. The automatic
+  /// nearest-branch pick is recomputed from the pin on every checkout anyway,
+  /// and storing its answer would make an old calculation look like a decision
+  /// the customer made.
+  void _recordSelectionChange() {
+    _changedSinceBoot = true;
+    unawaited(() async {
+      await _storeReady;
+      if (!mounted) return;
+      final order = state;
+
+      await LocalStore.instance.writeString(
+        localStorageOrderTypeKey,
+        order.orderType.name,
+      );
+      await LocalStore.instance.writeString(
+        localStorageManualBranchIdKey,
+        order.branchWasChosenManually && order.branch != null
+            ? order.branch!.id
+            : null,
+      );
+    }());
+  }
+
+  /// Re-applies the order type the customer last used.
+  ///
+  /// The branch itself is left to the checkout screen, which already picks one
+  /// once the branches load — for a remembered hand-pick that is
+  /// [rememberedManualBranchId]. Restoring happens before the customer has
+  /// acted: a switch they already made this session must not be rewritten by a
+  /// copy that was still being read.
+  Future<void> restoreSavedOrderType() async {
+    final prefs = await _storeReady;
+    if (prefs == null || !mounted || _changedSinceBoot) return;
+
+    final name = LocalStore.instance.readString(localStorageOrderTypeKey);
+    if (name == null || name.isEmpty) return;
+
+    final type = OrderType.values.where((t) => t.name == name).firstOrNull;
+    if (type == null || type == state.orderType) return;
+
+    state = state.copyWith(orderType: type);
+  }
+
+  /// The branch the customer picked by hand on their last visit, or null.
+  ///
+  /// Synchronous by the time a checkout screen can run: storage loads within
+  /// milliseconds of app start, and a not-yet-loaded store (unit tests) reads
+  /// null, which leaves the automatic first-branch fallback in place.
+  static String? rememberedManualBranchId() =>
+      LocalStore.instance.readString(localStorageManualBranchIdKey);
 
   /// Delivery: auto-selects the customer's default address (falling back to
   /// the first saved one) and, when that address has coordinates, the branch
@@ -111,6 +175,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
         branchWasChosenManually:
             existing != null && state.branchWasChosenManually,
       );
+      _recordSelectionChange();
       return;
     }
     final defaultAddress = addresses.any((a) => a.isDefault)
@@ -125,12 +190,14 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
         branch: selection.branch,
         branchIsNearest: selection.isNearestToAddress,
       );
+      _recordSelectionChange();
       return;
     }
     state = state.copyWith(
       orderType: OrderType.delivery,
       address: defaultAddress,
     );
+    _recordSelectionChange();
   }
 
   /// Pickup: no address, simple branch pick-one.
@@ -143,6 +210,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
       branchWasChosenManually:
           state.branch != null && state.branchWasChosenManually,
     );
+    _recordSelectionChange();
   }
 
   /// Delivery with an explicitly chosen address (address picker).
@@ -153,6 +221,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
         orderType: OrderType.delivery,
         address: address,
       );
+      _recordSelectionChange();
       return;
     }
     state = CheckoutState(
@@ -161,6 +230,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
       branch: selection.branch,
       branchIsNearest: selection.isNearestToAddress,
     );
+    _recordSelectionChange();
   }
 
   /// Works out the closest branch from a live map pin.
@@ -190,6 +260,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
       branchIsNearest: selection.isNearestToAddress,
       branchWasChosenManually: false,
     );
+    _recordSelectionChange();
   }
 
   void selectBranch(Branch branch) {
@@ -199,6 +270,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
       branchIsNearest: false,
       branchWasChosenManually: true,
     );
+    _recordSelectionChange();
   }
 
   /// Uses [branch] because nothing better is known — no pin, no coordinates on
@@ -216,6 +288,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
       branchIsNearest: false,
       branchWasChosenManually: false,
     );
+    _recordSelectionChange();
   }
 
   /// Closer branch by straight-line distance, or null when the address has no
@@ -228,5 +301,7 @@ class CheckoutNotifier extends StateNotifier<CheckoutState> {
 
 final checkoutProvider =
     StateNotifierProvider<CheckoutNotifier, CheckoutState>((ref) {
-  return CheckoutNotifier();
+  final notifier = CheckoutNotifier();
+  unawaited(notifier.restoreSavedOrderType());
+  return notifier;
 });

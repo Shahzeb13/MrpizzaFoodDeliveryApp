@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/storage/local_storage.dart';
 import '../../profile/providers/profile_provider.dart';
 import '../data/favorites_repository.dart';
 import '../data/menu_catalog.dart';
@@ -149,10 +154,83 @@ class CartState {
   CartState copyWith({List<CartItem>? items}) {
     return CartState(items: items ?? this.items);
   }
+
+  /// Encodes the lines for storage. Empty answers null so the caller removes
+  /// the key rather than storing `"[]"`.
+  static String? toStorageJson(List<CartItem> lines) {
+    if (lines.isEmpty) return null;
+    return jsonEncode([for (final line in lines) line.toStorageMap()]);
+  }
+
+  /// Reads back what [toStorageJson] wrote. Unreadable lines are dropped one by
+  /// one instead of failing the whole cart; anything that cannot be parsed at
+  /// all answers null (an empty cart on next start, never a crash).
+  static CartState? fromStorageJson(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return null;
+      final lines = <CartItem>[
+        for (final entry in decoded)
+          if (entry is Map<String, dynamic>)
+            if (CartItem.fromStorageMap(entry) case final line?) line,
+      ];
+      return CartState(items: lines);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
+/// The customer's cart, persisted across app restarts.
+///
+/// A guest who adds food, closes the app, comes back and finally logs in must
+/// still find the cart full — which is why the lines are saved locally through
+/// [LocalStore] and restored on first read. The saved copy is best-effort:
+/// storage problems leave the in-memory cart working exactly as before.
 class CartNotifier extends StateNotifier<CartState> {
-  CartNotifier() : super(const CartState(items: []));
+  CartNotifier() : super(const CartState(items: [])) {
+    // A feature that never shows before some screen watches this provider, so
+    // restoring waits for the first read and repairs the empty state within
+    // milliseconds. Storage that never opens just leaves the cart empty.
+    _storeReady = LocalStore.instance.ready();
+    unawaited(_hydrate());
+  }
+
+  late final Future<SharedPreferences?> _storeReady;
+  bool _changedSinceBoot = false;
+
+  static const _empty = CartState(items: []);
+
+  Future<void> _hydrate() async {
+    final prefs = await _storeReady;
+    if (prefs == null) return;
+
+    final restored = CartState.fromStorageJson(
+      LocalStore.instance.readString(localStorageCartKey),
+    );
+
+    // A customer who managed a tap before the read finished has already
+    // decided what their cart is; the stored copy is older than that.
+    if (!mounted || _changedSinceBoot || restored == null) return;
+    if (restored.isEmpty) return;
+
+    state = restored;
+  }
+
+  /// Writes the current lines (or removes the key when the cart is empty) once
+  /// storage is ready. The lines are read at write time so a burst of quick
+  /// taps still ends with the latest cart on disk.
+  void _persist() {
+    unawaited(() async {
+      await _storeReady;
+      if (!mounted) return;
+      await LocalStore.instance.writeString(
+        localStorageCartKey,
+        CartState.toStorageJson(state.items),
+      );
+    }());
+  }
 
   void addItem({
     required MenuItem item,
@@ -162,7 +240,12 @@ class CartNotifier extends StateNotifier<CartState> {
     int quantity = 1,
     String? instructions,
   }) {
-    final cartItemId = '${item.id}_${size.name}_${crust.name}_${toppings.map((t) => t.name).join('_')}';
+    final cartItemId = CartItem.lineIdentity(
+      item.id,
+      size,
+      crust,
+      toppings,
+    );
 
     final existingIndex = state.items.indexWhere((i) => i.id == cartItemId);
 
@@ -186,6 +269,7 @@ class CartNotifier extends StateNotifier<CartState> {
       );
       state = state.copyWith(items: [...state.items, newItem]);
     }
+    _recordChange();
   }
 
   void updateQuantity(String cartItemId, int delta) {
@@ -201,16 +285,33 @@ class CartNotifier extends StateNotifier<CartState> {
       }
     }
     state = state.copyWith(items: updatedItems);
+    _recordChange();
   }
 
   void removeItem(String cartItemId) {
     state = state.copyWith(
       items: state.items.where((item) => item.id != cartItemId).toList(),
     );
+    _recordChange();
   }
 
   void clearCart() {
-    state = const CartState(items: []);
+    state = _empty;
+    _recordChange();
+  }
+
+  /// Replaces the whole line list with [items], keeping each line's own
+  /// identity. Checkout-time revalidation needs this rather than re-adding:
+  /// the saved cart must come out the other side exactly once, neither merged
+  /// with itself nor doubled.
+  void replaceCartItems(List<CartItem> items) {
+    state = state.copyWith(items: items);
+    _recordChange();
+  }
+
+  void _recordChange() {
+    _changedSinceBoot = true;
+    _persist();
   }
 }
 

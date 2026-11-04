@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/location/data/geocoding_service.dart';
 import '../../features/location/data/geolocator_device_location_source.dart';
 import '../../features/location/data/location_repository.dart';
 import '../../features/profile/models/profile.dart';
+import '../storage/local_storage.dart';
 
 /// The app's one geocoder: reverse for the delivery map's pin, forward for a
 /// typed address.
@@ -93,14 +98,111 @@ class LocationState {
   }
 }
 
-/// Owns the customer's current location for the app session.
+/// Owns the customer's current location for the app session, and remembers it
+/// across app restarts.
+///
+/// The delivery address a guest typed, or the pin they put down on the map, is
+/// saved through [LocalStore] so reopening the app lands them back where their
+/// checkout was. Only settled, useful positions are stored — a capture that is
+/// still running, or one that failed, writes nothing and erases nothing, so a
+/// GPS miss can never delete the address the customer already had.
 class LocationNotifier extends StateNotifier<LocationState> {
   final LocationRepository repository;
 
-  LocationNotifier({required this.repository}) : super(const LocationState());
+  LocationNotifier({required this.repository}) : super(const LocationState()) {
+    // Restoring waits for the first read and fills the (still empty) state
+    // within milliseconds; a store that never opens leaves the session
+    // starting fresh, exactly as it did before persistence existed.
+    _storeReady = LocalStore.instance.ready();
+    unawaited(_hydrate());
+  }
+
+  late final Future<SharedPreferences?> _storeReady;
+  bool _changedSinceBoot = false;
 
   /// The state a fresh notifier starts in, with no address and no pin.
   LocationState build() => const LocationState();
+
+  Future<void> _hydrate() async {
+    final prefs = await _storeReady;
+    if (prefs == null) return;
+
+    final restored = _decodeStoredLocation(
+      LocalStore.instance.readString(localStorageLocationKey),
+    );
+
+    // A position captured in the milliseconds before storage answered has
+    // already superseded the stored one.
+    if (!mounted || _changedSinceBoot || restored == null) return;
+
+    state = restored;
+  }
+
+  /// Decodes what [_recordChange] wrote, or null when nothing usable is
+  /// stored. A typed address may carry no coordinates; a bare coordinate pair
+  /// without an address is half a pick and is dropped.
+  static LocationState? _decodeStoredLocation(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final address = decoded['address']?.toString() ?? '';
+      final rawLatitude = decoded['latitude'];
+      final rawLongitude = decoded['longitude'];
+      final latitude = rawLatitude is num ? rawLatitude.toDouble() : null;
+      final longitude = rawLongitude is num ? rawLongitude.toDouble() : null;
+
+      if (address.trim().isEmpty && (latitude == null || longitude == null)) {
+        return null;
+      }
+
+      return LocationState(
+        address: address,
+        isSet: true,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Saves the current position for the next app run. Nothing is written for
+  /// still-running captures, failed captures or a never-set state — those say
+  /// nothing about where the customer wants their food, and writing them would
+  /// destroy a good stored address.
+  ///
+  /// [forgetStored] is the explicit clear: the customer dismissed their
+  /// address, so the stored one must not come back.
+  void _recordChange({bool forgetStored = false}) {
+    _changedSinceBoot = true;
+    unawaited(() async {
+      await _storeReady;
+      if (!mounted) return;
+
+      if (forgetStored) {
+        await LocalStore.instance.writeString(localStorageLocationKey, null);
+        return;
+      }
+
+      final settled = state;
+      final worthKeeping = settled.isSet &&
+          !settled.isCapturing &&
+          settled.errorMessage == null &&
+          (settled.address.trim().isNotEmpty || settled.hasCoordinates);
+      if (!worthKeeping) return;
+
+      await LocalStore.instance.writeString(
+        localStorageLocationKey,
+        jsonEncode({
+          'address': settled.address,
+          if (settled.latitude != null) 'latitude': settled.latitude,
+          if (settled.longitude != null) 'longitude': settled.longitude,
+        }),
+      );
+    }());
+  }
 
   /// Records an address the customer typed or picked by hand.
   ///
@@ -115,7 +217,11 @@ class LocationNotifier extends StateNotifier<LocationState> {
   Future<void> setLocation(String newAddress) async {
     final trimmed = newAddress.trim();
     state = LocationState(address: trimmed, isSet: true);
-    if (trimmed.isEmpty) return;
+    if (trimmed.isEmpty) {
+      _recordChange(forgetStored: true);
+      return;
+    }
+    _recordChange();
 
     state = state.copyWith(isCapturing: true);
     final coordinates = await repository.geocodeAddressText(trimmed);
@@ -126,6 +232,7 @@ class LocationNotifier extends StateNotifier<LocationState> {
       longitude: coordinates?.longitude,
       isCapturing: false,
     );
+    _recordChange();
   }
 
   /// Applies one of the customer's saved addresses, keeping the coordinates
@@ -140,6 +247,7 @@ class LocationNotifier extends StateNotifier<LocationState> {
       latitude: address.latitude,
       longitude: address.longitude,
     );
+    _recordChange();
   }
 
   /// Asks the device for a position, then fills in the address text.
@@ -161,6 +269,7 @@ class LocationNotifier extends StateNotifier<LocationState> {
         latitude: captured.latitude,
         longitude: captured.longitude,
       );
+      _recordChange();
     } on LocationCaptureException catch (error) {
       state = LocationState(
         errorMessage: error.message,
@@ -187,6 +296,7 @@ class LocationNotifier extends StateNotifier<LocationState> {
       latitude: latitude,
       longitude: longitude,
     );
+    _recordChange();
   }
 
   /// Sends the customer to the OS settings page to grant location access.

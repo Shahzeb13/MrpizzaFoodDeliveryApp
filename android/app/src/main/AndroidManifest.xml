@@ -1,13 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Customer "Locate Me" on the delivery map and "Use Current Location" on
          the address form. Coarse is enough as a fallback; the app asks for fine
-         location at runtime, and only when the customer taps the button —
+         location at runtime, and only when the customer taps the button �?»
          moving the map by hand needs no permission at all.
          Mapbox's SDK downloads its styles and tiles over the network, which
          INTERNET already covers. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ requires runtime permission for notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="MrPizza"

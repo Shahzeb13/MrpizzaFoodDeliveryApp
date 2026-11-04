@@ -4,12 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/routing/route_guard.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/widgets.dart';
 import '../../../widgets/app_drawer.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../loyalty/models/loyalty.dart';
 import '../../loyalty/providers/loyalty_provider.dart';
 import '../../loyalty/widgets/spend_points_control.dart';
+import '../models/profile.dart';
 import '../providers/profile_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -116,7 +119,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: ref.watch(currentUserIdProvider) == null
+          ? const GuestAccountPanel()
+          : _buildSignedInBody(
+              currentRole: currentRole,
+              profileAsync: profileAsync,
+              loyalty: loyalty,
+              email: email,
+              profile: profile,
+            ),
+    );
+  }
+
+  Widget _buildSignedInBody({
+    required UserRole currentRole,
+    required AsyncValue<UserProfile?> profileAsync,
+    required LoyaltyBalance? loyalty,
+    required String email,
+    required UserProfile? profile,
+  }) {
+    return SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,7 +426,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 20),
           ],
         ),
-      ),
     );
   }
 
@@ -438,6 +459,70 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         trailing: const Icon(Icons.chevron_right,
             size: 20, color: AppColors.textLight),
+      ),
+    );
+  }
+}
+
+/// The account screen a signed-out visitor sees instead of blank fields.
+///
+/// Everything personal on this page is a database read behind a session, so a
+/// guest is told what an account unlocks rather than shown empty boxes. The
+/// cart they already filled survives both buttons — it belongs to the device.
+class GuestAccountPanel extends StatelessWidget {
+  const GuestAccountPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MrDoubleBezel(
+            radius: 24,
+            innerPadding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                const MrIconWell(
+                  icon: Icons.person_outline_rounded,
+                  color: AppColors.primary,
+                  background: AppColors.surface,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "You're browsing as a guest",
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The menu and your cart work without an account. Log in to '
+                  'place orders, track them, and use vouchers and points.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.push(loginLocation),
+                    icon: const Icon(Icons.login_rounded),
+                    label: const Text('Log in'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.push(signupLocation),
+                    icon: const Icon(Icons.person_add_alt_rounded),
+                    label: const Text('Create account'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -182,17 +182,15 @@ void main() {
       await pumpLiveOrderBar(tester, status: 'cancelled');
 
       // The regression this guards: the bar was hardcoded to success green, so
-      // "Order Cancelled" arrived in the app's good-news colour.
+      // "Order Cancelled" arrived in the app's good-news colour. The surface is
+      // now the shared neumorphic canvas for every stage, so the stage colour
+      // speaks through the badge circle instead — cancelled must still carry
+      // the danger colour there.
       expect(
         find.byWidgetPredicate(
           (widget) => widget is Container &&
               widget.decoration is BoxDecoration &&
-              (widget.decoration! as BoxDecoration).borderRadius ==
-                  BorderRadius.circular(22) &&
-              ((widget.decoration! as BoxDecoration).border?.top.color ==
-                      AppColors.danger.withValues(alpha: 0.32) ||
-                  (widget.decoration! as BoxDecoration).color ==
-                      AppColors.danger),
+              (widget.decoration! as BoxDecoration).color == AppColors.danger,
         ),
         findsWidgets,
       );

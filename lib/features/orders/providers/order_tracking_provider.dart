@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/providers/auth_provider.dart';
 import '../data/order_tracking_repository.dart';
 import '../models/order_tracking.dart';
 
@@ -10,7 +11,16 @@ final orderTrackingRepositoryProvider = Provider<OrderTrackingRepository>(
 /// The order checkout just created, held in memory so tracking can open straight
 /// away. The previous version of this was an in-memory list of invented orders,
 /// so the tracking screen had a "current order" with no row behind it.
-final trackedOrderIdProvider = StateProvider<String?>((ref) => null);
+final trackedOrderIdProvider = StateProvider<String?>((ref) {
+  ref.listen(authStateProvider, (previous, next) {
+    final prevUser = previous?.user?.id;
+    final nextUser = next.user?.id;
+    if (prevUser != nextUser) {
+      ref.controller.state = null;
+    }
+  });
+  return null;
+});
 
 /// The order the tracking screen should actually follow.
 ///

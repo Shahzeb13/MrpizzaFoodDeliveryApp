@@ -44,7 +44,7 @@ void main() {
           role: UserRole.customer,
           requestedLocation: location,
         ),
-        loginLocation,
+        '$loginLocation?return=${Uri.encodeComponent(location)}',
       );
     }
   });

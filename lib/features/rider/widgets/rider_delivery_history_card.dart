@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/widgets.dart';
 import '../models/rider_delivery.dart';
 
 /// A finished delivery: one line until tapped, then the order details.
@@ -29,48 +28,122 @@ class _RiderDeliveryHistoryCardState extends State<RiderDeliveryHistoryCard> {
   @override
   Widget build(BuildContext context) {
     final delivery = widget.delivery;
-    final delivered = delivery.assignmentStatus == 'delivered';
+    final isDeclined = delivery.assignmentStatus.toLowerCase().contains('decline') ||
+        delivery.assignmentStatus.toLowerCase().contains('cancel');
 
-    return MrCard(
-      onTap: () => setState(() => _expanded = !_expanded),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F3F8),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.white,
+            offset: Offset(-4, -4),
+            blurRadius: 10,
+          ),
+          BoxShadow(
+            color: Color(0x30A6B4C9),
+            offset: Offset(4, 4),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(22),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Text(delivery.billNumber,
-                        style: Theme.of(context).textTheme.titleSmall),
-                    if (delivery.customerName.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(delivery.customerName,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            delivery.billNumber,
+                            style: const TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF141923),
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          if (delivery.customerName.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              delivery.customerName,
+                              style: const TextStyle(
+                                fontFamily: 'PlusJakartaSans',
+                                fontSize: 13,
+                                color: Color(0xFF758295),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    // Status Pill (DELIVERED or DECLINED)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isDeclined
+                            ? const Color(0xFF141923)
+                            : const Color(0xFFE5EBF3),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: isDeclined
+                            ? null
+                            : const [
+                                BoxShadow(
+                                  color: Colors.white,
+                                  offset: Offset(-2, -2),
+                                  blurRadius: 4,
+                                ),
+                                BoxShadow(
+                                  color: Color(0x1EA6B4C9),
+                                  offset: Offset(2, 2),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isDeclined
+                                ? Icons.close_rounded
+                                : Icons.check_rounded,
+                            size: 13,
+                            color: isDeclined
+                                ? Colors.white
+                                : const Color(0xFFE51926),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isDeclined ? 'DECLINED' : 'DELIVERED',
+                            style: TextStyle(
+                              fontFamily: 'PlusJakartaSans',
+                              color: isDeclined
+                                  ? Colors.white
+                                  : const Color(0xFFE51926),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10.5,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              Text(
-                delivery.assignmentStatus,
-                style: TextStyle(
-                  color:
-                      delivered ? AppColors.success : AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(width: 4),
-              AnimatedRotation(
-                turns: _expanded ? 0.5 : 0,
-                duration: const Duration(milliseconds: 180),
-                child: const Icon(Icons.keyboard_arrow_down_rounded,
-                    size: 20, color: AppColors.textLight),
-              ),
-            ],
-          ),
           AnimatedSize(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
@@ -80,7 +153,10 @@ class _RiderDeliveryHistoryCardState extends State<RiderDeliveryHistoryCard> {
           ),
         ],
       ),
-    );
+    ),
+  ),
+),
+);
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/neumorphic.dart';
 import '../../../core/theme/widgets.dart';
 import '../../loyalty/providers/loyalty_provider.dart';
 import '../../loyalty/widgets/spend_points_control.dart';
@@ -55,19 +56,37 @@ class OrderTrackingScreen extends ConsumerWidget {
         context.go('/home');
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: NeuColors.background,
         appBar: AppBar(
-          title: const Text('Live Order Tracking'),
-          backgroundColor: AppColors.surface,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-            onPressed: () {
-              if (canGoBack) {
-                Navigator.of(context).pop();
-              } else {
-                context.go('/home');
-              }
-            },
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          title: const Text(
+            'Live Order Tracking',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: NeuColors.textPrimary,
+              letterSpacing: -0.4,
+            ),
+          ),
+          leading: Center(
+            child: NeuCircleButton(
+              size: 40,
+              onPressed: () {
+                if (canGoBack) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go('/home');
+                }
+              },
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 16,
+                color: NeuColors.textPrimary,
+              ),
+            ),
           ),
         ),
         body: trackingAsync.when(
@@ -286,75 +305,98 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   Widget _buildDeliveryPanel(BuildContext context, OrderTracking tracking) {
     final isPickup = tracking.isPickup;
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowSoft,
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
+    return NeuCard(
+      padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                isPickup ? Icons.storefront_rounded : Icons.home_rounded,
-                color: AppColors.primary,
-                size: 20,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: NeuColors.primary,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x59E51926),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  isPickup ? Icons.storefront_rounded : Icons.home_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                isPickup ? 'Collecting from the branch' : 'Delivering to',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (isPickup ? 'COLLECTING FROM' : 'DELIVERING TO').toUpperCase(),
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w900,
+                        color: NeuColors.primary,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isPickup
+                          ? (tracking.branchName ?? 'The branch handling your order')
+                          : (tracking.deliveryAddress ??
+                              'No address was saved on this order'),
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w900,
+                        color: NeuColors.textPrimary,
+                        letterSpacing: -0.2,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            isPickup
-                ? (tracking.branchName ?? 'The branch handling your order')
-                : (tracking.deliveryAddress ??
-                    'No address was saved on this order'),
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 14,
-              color: AppColors.textSecondary,
-              height: 1.4,
-            ),
-          ),
-          if (!isPickup && tracking.branchName != null) ...[
-            const SizedBox(height: 10),
-            Row(
+          const SizedBox(height: 14),
+          NeuInset(
+            borderRadius: BorderRadius.circular(14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
               children: [
-                const Icon(Icons.storefront_rounded,
-                    color: AppColors.textLight, size: 16),
+                const Icon(
+                  Icons.access_time_rounded,
+                  size: 16,
+                  color: NeuColors.textSecondary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Being prepared at ${tracking.branchName}',
+                    tracking.branchName != null
+                        ? 'Being prepared at ${tracking.branchName}'
+                        : 'Being prepared in Abbottabad',
                     style: const TextStyle(
                       fontFamily: AppTheme.fontFamily,
                       fontSize: 12,
-                      color: AppColors.textLight,
+                      fontWeight: FontWeight.w600,
+                      color: NeuColors.textSecondary,
                     ),
                   ),
                 ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -366,22 +408,35 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MrSectionTitle(
-          eyebrow: 'What You Ordered',
-          title: 'Order Items',
-          trailing: Text(
-            'Rs. ${tracking.total.toInt()}',
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              'What you ordered',
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: NeuColors.textPrimary,
+                letterSpacing: -0.4,
+              ),
             ),
-          ),
+            Text(
+              'Rs. ${tracking.total.toInt()}',
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: NeuColors.textPrimary,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         ...tracking.items.map(_buildItemRow),
-        const SizedBox(height: 8),
+        const SizedBox(height: 14),
         _buildTotalsPanel(),
       ],
     );
@@ -389,36 +444,50 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
 
   /// The points this order actually credited, read from the ledger row the
   /// delivery trigger wrote.
-  ///
-  /// Not derived from the order total: the rate is a setting the admin controls,
-  /// so the only figure that cannot drift from the admin panel is the one the
-  /// ledger recorded.
   Widget _buildPointsCreditedCard(BuildContext context, int pointsEarned) {
-    return MrCard(
+    return NeuCard(
       padding: const EdgeInsets.all(16),
-      borderRadius: BorderRadius.circular(18),
-      color: AppColors.goldTint,
+      borderRadius: BorderRadius.circular(20),
       child: Row(
         children: [
-          const MrIconWell(
-            icon: Icons.stars_rounded,
-            color: AppColors.accent,
-            background: AppColors.surface,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: NeuColors.accent,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x40FF9800),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.stars_rounded, color: Colors.white, size: 24),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'You earned ${formatPoints(pointsEarned)} points',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: NeuColors.textPrimary,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Already added to your balance — spend them on your next '
-                  'order.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  'Already added to your balance — spend them on your next order.',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 12,
+                    color: NeuColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -428,59 +497,55 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     );
   }
 
-  Widget _buildItemRow(TrackedOrderItem item) {    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowSoft,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _buildItemThumbnail(imageUrl: item.imageUrl),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              item.name,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: AppColors.textPrimary,
+  Widget _buildItemRow(TrackedOrderItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: NeuCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        borderRadius: BorderRadius.circular(24),
+        child: Row(
+          children: [
+            _buildItemThumbnail(imageUrl: item.imageUrl),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: NeuColors.textPrimary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Quantity ${item.quantity}',
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: NeuColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                'x${item.quantity}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
+            Text(
+              'Rs. ${item.lineTotal.toInt()}',
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: NeuColors.textPrimary,
+                letterSpacing: -0.3,
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Rs. ${item.lineTotal.toInt()}',
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -488,71 +553,63 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   Widget _buildItemThumbnail({required String? imageUrl}) {
     final url = (imageUrl ?? '').trim();
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: url.isEmpty
-          ? Container(
-              width: 48,
-              height: 48,
-              color: AppColors.sand,
-              child: const Center(
-                child: Text('🍕', style: TextStyle(fontSize: 22)),
-              ),
-            )
-          : Image.network(
-              url,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+    return NeuInset(
+      borderRadius: BorderRadius.circular(30),
+      padding: const EdgeInsets.all(4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: url.isEmpty
+            ? Container(
                 width: 48,
                 height: 48,
-                color: AppColors.sand,
+                color: NeuColors.sand,
                 child: const Center(
-                    child: Text('🍕', style: TextStyle(fontSize: 22))),
+                  child: Text('🍕', style: TextStyle(fontSize: 24)),
+                ),
+              )
+            : Image.network(
+                url,
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 48,
+                  height: 48,
+                  color: NeuColors.sand,
+                  child: const Center(
+                    child: Text('🍕', style: TextStyle(fontSize: 24)),
+                  ),
+                ),
               ),
-            ),
+      ),
     );
   }
 
-  /// The money lines, all read from the `orders` row.
-  ///
-  /// The total is the database's, not a subtraction done in the widget — the
-  /// same figure the kitchen, the ledger and the receipt are working from.
+  /// The money lines, all read from the `orders` row in a soft neumorphic card.
   Widget _buildTotalsPanel() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.primaryTint,
-        borderRadius: BorderRadius.circular(14),
-      ),
+    return NeuCard(
+      borderRadius: BorderRadius.circular(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       child: Column(
         children: [
           _totalLine('Subtotal', 'Rs. ${tracking.subtotal.toInt()}'),
           if (tracking.tax > 0) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             _totalLine('Tax', 'Rs. ${tracking.tax.toInt()}'),
           ],
           if (tracking.deliveryCharges > 0) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             _totalLine('Delivery', 'Rs. ${tracking.deliveryCharges.toInt()}'),
           ],
           if (tracking.discountAmount > 0) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             _totalLine(
-              // Deliberately not "Voucher Discount": `redeem_loyalty_points`
-              // writes to the same `orders.discount_amount` column, so a voucher
-              // label here would leave the customer looking for a voucher they
-              // never used on an order where they spent points.
               'Discount Applied',
               '-Rs. ${tracking.discountAmount.toInt()}',
               isDiscount: true,
             ),
           ],
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Divider(color: AppColors.border, height: 1),
-          ),
+          const SizedBox(height: 12),
           _totalLine('Total', 'Rs. ${tracking.total.toInt()}', bold: true),
         ],
       ),
@@ -562,23 +619,20 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   Widget _totalLine(String label, String value,
       {bool bold = false, bool isDiscount = false}) {
     final color = isDiscount
-        ? AppColors.success
-        : bold
-            ? AppColors.primary
-            : AppColors.textSecondary;
+        ? const Color(0xFF2E7D32)
+        : NeuColors.textPrimary;
 
     final style = TextStyle(
       fontFamily: AppTheme.fontFamily,
-      fontSize: bold ? 14 : 13,
-      fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+      fontSize: bold ? 16 : 14,
+      fontWeight: bold ? FontWeight.w900 : FontWeight.w600,
       color: color,
+      letterSpacing: bold ? -0.3 : 0,
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Both sides are flexed: a long voucher label or a four-figure total
-        // must wrap instead of striping the edge of the customer's phone.
         Expanded(
           child: Text(label, style: style, overflow: TextOverflow.ellipsis),
         ),
@@ -612,8 +666,22 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const MrSectionTitle(eyebrow: 'Progress', title: 'Order Pipeline'),
-        const SizedBox(height: 18),
+        NeuPillBadge(
+          label: 'PROGRESS',
+          textColor: NeuColors.primary,
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Order pipeline',
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: NeuColors.textPrimary,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 20),
         ...steps.asMap().entries.map((entry) {
           final index = entry.key;
           return _buildTrackingStep(
@@ -630,67 +698,58 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
   }
 
   /// The delivery track: confirmed, cooking, bagged, on the way, delivered.
-  ///
-  /// Five steps, because a delivery genuinely has two more than a pickup does —
-  /// and every one of them names the person or the place actually involved.
   List<_PipelineStep> _deliveryPipelineSteps(OrderTracking tracking) {
     final riderName = tracking.rider?.fullName;
     return [
       const _PipelineStep(
-        title: 'Order Confirmed',
+        title: 'Order confirmed',
         subtitle: 'The branch has your order',
-        icon: Icons.check_circle,
+        icon: Icons.check_rounded,
       ),
       const _PipelineStep(
-        title: 'Preparing Your Food',
+        title: 'Preparing your food',
         subtitle: 'The kitchen is cooking your order',
-        icon: Icons.local_fire_department,
+        icon: Icons.local_fire_department_rounded,
       ),
       const _PipelineStep(
-        title: 'Ready for Pickup',
+        title: 'Ready for pickup',
         subtitle: 'Your food is packed and waiting for the rider',
-        icon: Icons.takeout_dining_rounded,
+        icon: Icons.shopping_bag_outlined,
       ),
       _PipelineStep(
-        title: 'On The Way',
+        title: 'On the way',
         subtitle: riderName == null
             ? 'A rider is bringing your order'
             : '$riderName is bringing your order',
-        icon: Icons.delivery_dining,
+        icon: Icons.two_wheeler_rounded,
       ),
       const _PipelineStep(
         title: 'Delivered',
         subtitle: 'Enjoy your Mr. Pizza order',
-        icon: Icons.home,
+        icon: Icons.home_outlined,
       ),
     ];
   }
 
-  /// The pickup track: confirmed, cooking, collected. Three steps.
-  ///
-  /// The customer is standing at a counter reading this. Every line has to be
-  /// true of *this* order — which is why "waiting for the rider" and "on the
-  /// way" are gone rather than reworded. There is no rider, and nothing is
-  /// going anywhere.
   List<_PipelineStep> _pickupPipelineSteps(OrderTracking tracking) {
     final branch = tracking.branchName;
     return [
       const _PipelineStep(
-        title: 'Order Confirmed',
+        title: 'Order confirmed',
         subtitle: 'The branch has your order',
-        icon: Icons.check_circle,
+        icon: Icons.check_rounded,
       ),
       const _PipelineStep(
-        title: 'Preparing Your Food',
+        title: 'Preparing your food',
         subtitle: 'The kitchen is cooking your order',
-        icon: Icons.local_fire_department,
+        icon: Icons.local_fire_department_rounded,
       ),
       _PipelineStep(
-        title: 'Ready to Collect',
+        title: 'Ready to collect',
         subtitle: branch == null
             ? 'Your food is packed and waiting at the counter'
             : 'Your food is packed and waiting at $branch',
-        icon: Icons.takeout_dining_rounded,
+        icon: Icons.shopping_bag_outlined,
       ),
       const _PipelineStep(
         title: 'Collected',
@@ -708,57 +767,114 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
     required bool isCurrent,
     required bool isLast,
   }) {
-    final color = isCurrent
-        ? AppColors.primary
-        : isCompleted
-            ? AppColors.success
-            : AppColors.textLight;
+    // Styling per screenshot Image 1:
+    // Past completed steps: solid red circle with white icon & red glow
+    // Current step: dark circular container with subtle outline & white icon (or red if highlighted)
+    // Future steps: light neumorphic circular button with muted icon
+    final isDone = isCompleted;
+    final isActive = isCurrent;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Column(
           children: [
-            PulsingStepRing(
-              active: isCurrent,
-              color: AppColors.primary,
-              child: Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.13),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color, width: isCurrent ? 2 : 1.4),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDone
+                    ? NeuColors.primary
+                    : isActive
+                        ? const Color(0xFF1F1F24)
+                        : NeuColors.background,
+                boxShadow: isDone
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x66E51926),
+                          blurRadius: 14,
+                          offset: Offset(0, 4),
+                        ),
+                      ]
+                    : isActive
+                        ? const [
+                            BoxShadow(
+                              color: Color(0x33E51926),
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                            BoxShadow(
+                              color: Color(0x40000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ]
+                        : const [
+                            BoxShadow(
+                              color: Color(0x18000000),
+                              blurRadius: 6,
+                              offset: Offset(2, 2),
+                            ),
+                            BoxShadow(
+                              color: Colors.white,
+                              blurRadius: 6,
+                              offset: Offset(-2, -2),
+                            ),
+                          ],
+                border: isActive
+                    ? Border.all(color: const Color(0x80E51926), width: 2)
+                    : null,
+              ),
+              child: Center(
+                child: Icon(
+                  step.icon,
+                  size: 22,
+                  color: (isDone || isActive)
+                      ? Colors.white
+                      : NeuColors.textSecondary,
                 ),
-                child: Icon(step.icon, color: color, size: 20),
               ),
             ),
-            AnimatedStepConnector(
-              filled: isCompleted,
-              isLast: isLast,
-            ),
+            if (!isLast)
+              Container(
+                width: 2.5,
+                height: 38,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDone ? NeuColors.primary.withValues(alpha: 0.3) : const Color(0xFFD6DEE8),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
           ],
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 16),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 4, bottom: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 320),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color:
-                        isCurrent ? AppColors.primary : AppColors.textPrimary,
+                Text(
+                  step.title,
+                  style: const TextStyle(
                     fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                    color: NeuColors.textPrimary,
+                    letterSpacing: -0.2,
                   ),
-                  child: Text(step.title),
                 ),
-                const SizedBox(height: 2),
-                Text(step.subtitle, style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 16),
+                const SizedBox(height: 3),
+                Text(
+                  step.subtitle,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: NeuColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),

@@ -46,6 +46,13 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
   // is built once the real `categories` rows arrive rather than from a
   // hardcoded list of headings.
   TabController? _tabController;
+
+  /// The selected category as plain build-time state. The chips render from
+  /// this, not from `_tabController.index`, because a TabController only moves
+  /// mid-animation and never repaints on its own — nothing else rebuilds for
+  /// it. The listener diffs the controller against this value.
+  int _selectedCategoryIndex = 0;
+
   final ScrollController _scrollController = ScrollController();
   final Map<String, GlobalKey> _categoryKeys = {};
 
@@ -84,6 +91,11 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
 
   /// Keeps the tab bar in step with the number of real categories.
   void _syncTabController(List<MenuCategory> categories) {
+    // Before the catalog arrives there is nothing to tab across, and a
+    // zero-length TabController would start it off useless. The controller is
+    // created the first time real categories appear.
+    if (categories.isEmpty) return;
+
     final existing = _tabController;
     if (existing != null && existing.length == categories.length) return;
 
@@ -93,6 +105,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
     final controller = TabController(length: categories.length, vsync: this)
       ..addListener(_handleTabSelection);
     _tabController = controller;
+    _selectedCategoryIndex = 0;
   }
 
   @override
@@ -105,15 +118,27 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
   }
 
   void _handleTabSelection() {
-    final categories = ref.read(menuCategoriesProvider);
+    // The only job here is keeping [_selectedCategoryIndex] in step, so the
+    // chips repaint whenever the controller actually moved — whatever moved it
+    // (a chip tap, a scroll-sync animateTo) repaints through the same path.
+    // Scrolling is deliberately NOT done in here: _handleScroll reports the
+    // category the customer is dragging over with animateTo, and an
+    // ensureVisible fired from that call would yank the feed back on top of
+    // their finger. The feed only jumps when a chip is tapped.
     final index = _tabController?.index ?? 0;
-    if (index < 0 || index >= categories.length) return;
-    if (_tabController?.indexIsChanging ?? false) {
-      _scrollToCategory(categories[index]);
+    if (index == _selectedCategoryIndex) return;
+    if (mounted) {
+      setState(() {
+        _selectedCategoryIndex = index;
+      });
     }
   }
 
   void _scrollToCategory(MenuCategory category) {
+    // One programmatic scroll at a time: the scroll-driven tab sync would
+    // otherwise start a second ensureVisible over the first one's target and
+    // the feed lurches under the customer's finger.
+    if (_isProgrammaticScroll) return;
     final key = _categoryKeys[category.id];
     if (key != null && key.currentContext != null) {
       _isProgrammaticScroll = true;
@@ -159,25 +184,67 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFFF0F3F8),
       drawer: const AppDrawer(),
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
+        backgroundColor: const Color(0xFFF0F3F8),
         elevation: 0,
         scrolledUnderElevation: 0,
+        toolbarHeight: 68,
+        leadingWidth: 64,
         leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu_rounded,
-                color: AppColors.textPrimary, size: 26),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+          builder: (context) => Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Center(
+              child: GestureDetector(
+                onTap: () => Scaffold.of(context).openDrawer(),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFF0F3F8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white,
+                        offset: Offset(-3, -3),
+                        blurRadius: 8,
+                      ),
+                      BoxShadow(
+                        color: Color(0x30A6B4C9),
+                        offset: Offset(3, 3),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.menu_rounded,
+                    color: Color(0xFF141923),
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
         title: _isSearching
             ? Container(
-                height: 40,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: AppColors.sand,
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFFE5EBF3),
+                  borderRadius: BorderRadius.circular(21),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      offset: const Offset(2, 2),
+                      blurRadius: 4,
+                    ),
+                    const BoxShadow(
+                      color: Colors.white,
+                      offset: Offset(-2, -2),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
                 child: TextField(
                   controller: _searchController,
@@ -188,7 +255,7 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
                   decoration: const InputDecoration(
                     hintText: 'Search pizzas, burgers...',
                     prefixIcon: Icon(Icons.search,
-                        size: 18, color: AppColors.textSecondary),
+                        size: 18, color: Color(0xFF758295)),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 10),
                   ),
@@ -197,86 +264,183 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
             : GestureDetector(
                 onTap: _openLocationPicker,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Row(
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 13,
+                          color: Color(0xFFE51926),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
                           'DELIVER TO',
                           style: TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
-                            color: AppColors.accent,
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                            color: Color(0xFFE51926),
                           ),
                         ),
-                        Icon(Icons.keyboard_arrow_down,
-                            size: 14, color: AppColors.textSecondary),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 15,
+                          color: Color(0xFFE51926),
+                        ),
                       ],
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       locationState.address.isEmpty
-                          ? 'Choose delivery address'
+                          ? 'Triple one hotel near comsats'
                           : locationState.address,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: AppTheme.fontFamily,
+                      style: const TextStyle(
+                        fontFamily: 'PlusJakartaSans',
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.2,
-                        color: locationState.address.isEmpty
-                            ? AppColors.textLight
-                            : AppColors.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.3,
+                        color: Color(0xFF141923),
                       ),
                     ),
                   ],
                 ),
               ),
+        centerTitle: true,
         actions: [
-          IconButton(
-            icon: Icon(
-              _isSearching ? Icons.close : Icons.search_rounded,
-              color: AppColors.textPrimary,
-              size: 23,
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isSearching = !_isSearching;
+                    if (!_isSearching) {
+                      _searchController.clear();
+                      ref.read(searchQueryProvider.notifier).state = '';
+                    }
+                  });
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFF0F3F8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white,
+                        offset: Offset(-3, -3),
+                        blurRadius: 8,
+                      ),
+                      BoxShadow(
+                        color: Color(0x30A6B4C9),
+                        offset: Offset(3, 3),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    _isSearching ? Icons.close : Icons.search_rounded,
+                    color: const Color(0xFF141923),
+                    size: 20,
+                  ),
+                ),
+              ),
             ),
-            onPressed: () {
-              setState(() {
-                _isSearching = !_isSearching;
-                if (!_isSearching) {
-                  _searchController.clear();
-                  ref.read(searchQueryProvider.notifier).state = '';
-                }
-              });
-            },
           ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
+          preferredSize: const Size.fromHeight(56),
           child: Container(
-            decoration: const BoxDecoration(
-              color: AppColors.surface,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.textSecondary,
-              indicatorColor: AppColors.primary,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w800,
-                fontSize: 13.5,
-                letterSpacing: -0.2,
-              ),
-              tabs: categories
-                  .map((category) => Tab(text: category.name))
-                  .toList(),
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final cat = categories[index];
+                final isSelected = _selectedCategoryIndex == index;
+                return GestureDetector(
+                  onTap: () {
+                    // The bounce to the section is requested from the tap
+                    // itself; animateTo only drives the highlight, whose
+                    // repaint is done by the selection listener.
+                    _scrollToCategory(cat);
+                    _tabController?.animateTo(index);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFE5EBF3)
+                          : const Color(0xFFF0F3F8),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.06),
+                                offset: const Offset(2, 2),
+                                blurRadius: 4,
+                              ),
+                              const BoxShadow(
+                                color: Colors.white,
+                                offset: Offset(-2, -2),
+                                blurRadius: 4,
+                              ),
+                            ]
+                          : const [
+                              BoxShadow(
+                                color: Colors.white,
+                                offset: Offset(-3, -3),
+                                blurRadius: 6,
+                              ),
+                              BoxShadow(
+                                color: Color(0x2AA6B4C9),
+                                offset: Offset(3, 3),
+                                blurRadius: 6,
+                              ),
+                            ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isSelected) ...[
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE51926),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          cat.name,
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                            color: isSelected
+                                ? const Color(0xFFE51926)
+                                : const Color(0xFF141923),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -286,152 +450,126 @@ class _HomeFeedViewState extends ConsumerState<HomeFeedView>
           CustomScrollView(
             controller: _scrollController,
             slivers: [
-              // Hero Pizza Banner Image with Mr. Pizza Logo & Brand Overlay
+              // Elevated Neumorphic Mr. Pizza Brand Card matching reference screenshot
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
                   child: Container(
-                    height: 178,
-                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
                     decoration: BoxDecoration(
+                      color: const Color(0xFFF0F3F8),
                       borderRadius: BorderRadius.circular(28),
                       boxShadow: const [
                         BoxShadow(
-                          color: AppColors.shadow,
-                          blurRadius: 18,
-                          offset: Offset(0, 8),
+                          color: Colors.white,
+                          offset: Offset(-5, -5),
+                          blurRadius: 14,
+                        ),
+                        BoxShadow(
+                          color: Color(0x35A6B4C9),
+                          offset: Offset(5, 5),
+                          blurRadius: 14,
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: Stack(
-                        children: [
-                          // Food Banner Background Image
-                          Image.asset(
-                            'assets/images/banner_deal.jpg',
-                            width: double.infinity,
-                            height: 178,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                height: 178,
-                                color: AppColors.primaryDark,
-                              );
-                            },
+                    child: Row(
+                      children: [
+                        // Debossed Rounded Square Logo Container
+                        Container(
+                          width: 82,
+                          height: 82,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE5EBF3),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                offset: const Offset(2, 2),
+                                blurRadius: 4,
+                              ),
+                              const BoxShadow(
+                                color: Colors.white,
+                                offset: Offset(-2, -2),
+                                blurRadius: 4,
+                              ),
+                            ],
                           ),
-
-                          // Warm Scrim Gradient Overlay
-                          Container(
-                            width: double.infinity,
-                            height: 178,
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.bannerScrim,
-                                  AppColors.bannerScrim,
-                                  Colors.transparent,
-                                ],
-                                begin: Alignment.bottomLeft,
-                                end: Alignment.topRight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Center(
+                                child: Text('🍕', style: TextStyle(fontSize: 34)),
                               ),
                             ),
                           ),
+                        ),
+                        const SizedBox(width: 18),
 
-                          // Mr. Pizza Logo & Brand Info Overlaid on Pizza Banner
-                          Positioned(
-                            left: 18,
-                            bottom: 16,
-                            right: 18,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                // Official Chef Mascot Logo Badge
-                                Container(
-                                  width: 66,
-                                  height: 66,
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
-                                    border: Border.all(
-                                        color: AppColors.accent, width: 2),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Colors.black26,
-                                        blurRadius: 10,
-                                        offset: Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipOval(
-                                    child: Image.asset(
-                                      'assets/images/logo.png',
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Center(
-                                          child: Text('👨‍🍳',
-                                              style: TextStyle(fontSize: 30)),
-                                        );
-                                      },
+                        // Title, LOVE IN EVERY BITE pill, and Subtitle
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                'Mr. Pizza',
+                                style: TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF141923),
+                                  letterSpacing: -0.6,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE5EBF3),
+                                  borderRadius: BorderRadius.circular(999),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.04),
+                                      offset: const Offset(1, 1),
+                                      blurRadius: 2,
                                     ),
+                                    const BoxShadow(
+                                      color: Colors.white,
+                                      offset: Offset(-1, -1),
+                                      blurRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                                child: const Text(
+                                  'LOVE IN EVERY BITE',
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFFE51926),
+                                    letterSpacing: 1.2,
                                   ),
                                 ),
-                                const SizedBox(width: 14),
-
-                                // Brand Name & Slogan Badge
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Text(
-                                        'Mr. Pizza',
-                                        style: TextStyle(
-                                          fontFamily: AppTheme.fontFamily,
-                                          fontSize: 27,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                          letterSpacing: -0.8,
-                                          height: 1.05,
-                                          shadows: [
-                                            Shadow(
-                                              color: Colors.black45,
-                                              blurRadius: 8,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 9, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.goldTint,
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: const Text(
-                                          'LOVE IN EVERY BITE',
-                                          style: TextStyle(
-                                            fontFamily: AppTheme.fontFamily,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFF7A5414),
-                                            letterSpacing: 1.6,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Wood-fired pizzas · Abbottabad',
+                                style: TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF758295),
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -598,6 +736,74 @@ class _MenuCatalogSection extends ConsumerWidget {
                 child: CategoryHeroCard(
                   category: category,
                   bannerImageUrl: _getCategoryBannerUrl(category),
+                ),
+              ),
+            ),
+            // Neumorphic Section Header with Option Count Pill
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          category.name,
+                          style: const TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF141923),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Prepared fresh in our kitchen',
+                          style: TextStyle(
+                            fontFamily: 'PlusJakartaSans',
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF758295),
+                          ),
+                        ),
+                      ],
+                    ),
+                    // 'N OPTIONS' Debossed Pill Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5EBF3),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            offset: const Offset(1, 1),
+                            blurRadius: 2,
+                          ),
+                          const BoxShadow(
+                            color: Colors.white,
+                            offset: Offset(-1, -1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '${categoryItems.length} OPTIONS',
+                        style: const TextStyle(
+                          fontFamily: 'PlusJakartaSans',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFE51926),
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

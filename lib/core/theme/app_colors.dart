@@ -6,14 +6,14 @@ import 'package:flutter/material.dart';
 /// warm ivory surfaces, espresso ink, and a supporting honey gold reserved for
 /// special-offer chips and the logo ring only.
 abstract final class AppColors {
-  // Brand Accent (Warm Charred Brick — Single Interactive Accent)
-  static const Color primary = Color(0xFFB23A24);      // Burnt Tomato / Brick
-  static const Color primaryDark = Color(0xFF8C2B19);  // Deep Charred Brick
-  static const Color primaryLight = Color(0xFFD96A4A); // Ember
+  // Brand Accent (Vibrant Red matching reference UI)
+  static const Color primary = Color(0xFFE51926);      // Vibrant Primary Red
+  static const Color primaryDark = Color(0xFFB8101C);  // Deep Red
+  static const Color primaryLight = Color(0xFFFF3B47); // Coral Red
 
   // Brand Tints (Soft, low-saturation surfaces derived from the accent)
-  static const Color primaryTint = Color(0xFFFCEAE4);  // Blush
-  static const Color primaryTintDeep = Color(0xFFF6DBD0);
+  static const Color primaryTint = Color(0xFFFFECEE);  // Soft Pinkish Blush
+  static const Color primaryTintDeep = Color(0xFFFFD4D8);
 
   // Supporting Highlight (Honey Gold — offers, logo ring, stars gradient)
   static const Color accent = Color(0xFFE3A63B);
@@ -28,11 +28,12 @@ abstract final class AppColors {
   // order is never mistaken for the brand's normal action colour.
   static const Color danger = Color(0xFF8E1F2A);     // Deep Crimson
 
-  // Backgrounds & Surfaces (Warm Ivory Family — single warm gray hue)
-  static const Color background = Color(0xFFFBF5EE);  // Warm Ivory
-  static const Color surface = Color(0xFFFFFFFF);    // Crisp White
-  static const Color sand = Color(0xFFF1E8DC);       // Warm Sand (outer shells)
-  static const Color sandDeep = Color(0xFFE8DCCB);   // Deep Sand (fills/hairlines)
+  // Backgrounds & Surfaces (Soft Neumorphic Canvas)
+  static const Color background = Color(0xFFF0F3F8);  // Soft Neumorphic Slate Canvas
+  static const Color surface = Color(0xFFF0F3F8);     // Surface matches canvas for soft dual-shadow
+  static const Color surfacePure = Color(0xFFFFFFFF); // Crisp White
+  static const Color sand = Color(0xFFE5EBF3);        // Debossed well
+  static const Color sandDeep = Color(0xFFD8E1ED);    // Deep Debossed fill
   static const Color surfaceDark = Color(0xFF241A12); // Espresso
   static const Color cardBg = Color(0xFFFFFFFF);
 

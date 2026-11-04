@@ -2,19 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/neumorphic.dart';
 import '../../menu/providers/menu_provider.dart';
 import '../../orders/models/order.dart';
 import '../../orders/providers/orders_provider.dart';
 import '../models/payment_choice.dart';
 import '../providers/discount_provider.dart';
 
-/// How the customer wants to pay.
-///
-/// Nothing is written to the database from this screen. It pops the choice back
-/// to checkout, and that is where the order is actually placed — so a customer
-/// who opens this page and walks away has created nothing at all.
+/// How the customer wants to pay in the exact Neumorphic design language.
 class PaymentMethodScreen extends ConsumerWidget {
   const PaymentMethodScreen({super.key});
 
@@ -23,9 +19,6 @@ class PaymentMethodScreen extends ConsumerWidget {
     final cart = ref.watch(cartProvider);
     final checkout = ref.watch(checkoutProvider);
 
-    // Resolved the same way checkout resolves it, so the figure shown here is
-    // the figure the customer just confirmed and not a second, looser estimate.
-    // The database remains the authority: payfast-token re-reads orders.total.
     final branchId = checkout.branch?.id;
     final feeAsync = branchId == null
         ? const AsyncValue<double?>.data(null)
@@ -49,10 +42,36 @@ class PaymentMethodScreen extends ConsumerWidget {
         .clamp(0.0, double.infinity);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment Method')),
+      backgroundColor: NeuColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Payment Method',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: NeuColors.textPrimary,
+            letterSpacing: -0.4,
+          ),
+        ),
+        leading: Center(
+          child: NeuCircleButton(
+            size: 40,
+            onPressed: () => context.pop(),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 16,
+              color: NeuColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
             _TotalCard(
               due: due,
@@ -66,26 +85,44 @@ class PaymentMethodScreen extends ConsumerWidget {
               subtitle:
                   'Card, JazzCash, EasyPaisa or bank transfer. Pay securely on '
                   "PayFast's page.",
-              badge: 'Recommended',
+              badge: 'RECOMMENDED',
               onTap: () => context.pop(PaymentChoice.online),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             _ChoiceTile(
               icon: Icons.payments_outlined,
               title: PaymentChoice.cashOnDelivery.label,
               subtitle: 'Pay the rider in cash when your order arrives.',
               onTap: () => context.pop(PaymentChoice.cashOnDelivery),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Your order is only created once you choose how to pay. '
-              'Card details are entered on PayFast\'s own page — MrPizza never '
-              'sees or stores them.',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontSize: 12.5,
-                height: 1.45,
-                color: AppColors.textPrimary.withValues(alpha: 0.55),
+            const SizedBox(height: 26),
+            NeuInset(
+              borderRadius: 20,
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.security_rounded,
+                    color: NeuColors.textSecondary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Your order is only created once you choose how to pay. '
+                      'Card details are entered on PayFast\'s encrypted page — Mr. Pizza '
+                      'never sees or stores them.',
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontSize: 12,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: NeuColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -108,47 +145,75 @@ class _TotalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(      padding: const EdgeInsets.all(20),
+    return Container(
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+        color: const Color(0xFF16161A),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Amount to pay',
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary.withValues(alpha: 0.6),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Amount to pay',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF9EA3AE),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: NeuColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$itemCount item${itemCount == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Text(
-            'Rs. ${due.toStringAsFixed(2)}',
+            'Rs. ${due.toInt()}',
             style: const TextStyle(
               fontFamily: AppTheme.fontFamily,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
               letterSpacing: -0.8,
-              color: AppColors.textPrimary,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            saving > 0
-                ? '$itemCount item${itemCount == 1 ? '' : 's'} · you saved '
-                    'Rs. ${saving.toStringAsFixed(2)}'
-                : '$itemCount item${itemCount == 1 ? '' : 's'}',
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontSize: 12.5,
-              color: AppColors.textPrimary.withValues(alpha: 0.6),
+          if (saving > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              'You saved Rs. ${saving.toInt()} on this order',
+              style: const TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF4CAF50),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -172,88 +237,79 @@ class _ChoiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return NeuCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 24,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha: 0.25),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: NeuColors.primary,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66E51926),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                          ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w900,
+                          color: NeuColors.textPrimary,
+                          letterSpacing: -0.2,
                         ),
                       ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            badge!,
-                            style: const TextStyle(
-                              fontFamily: AppTheme.fontFamily,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.success,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontSize: 12.5,
-                      height: 1.4,
-                      color: AppColors.textPrimary.withValues(alpha: 0.6),
                     ),
+                    if (badge != null) ...[
+                      const SizedBox(width: 8),
+                      NeuPillBadge(
+                        label: badge!,
+                        textColor: NeuColors.primary,
+                        isInset: true,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontSize: 12.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: NeuColors.textSecondary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right_rounded,
-                color: AppColors.textPrimary.withValues(alpha: 0.4)),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: NeuColors.textSecondary,
+            size: 22,
+          ),
+        ],
       ),
     );
   }

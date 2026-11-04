@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/providers/auth_provider.dart';
 import '../models/order_tracking.dart';
 import '../presentation/live_order_visibility.dart';
 import 'order_tracking_provider.dart';
@@ -30,7 +31,16 @@ const Duration liveOrderMaxAdoptionAge = Duration(hours: 1);
 ///
 /// A pin cannot do that. Once set it either still points at an order the bar is
 /// following, or it has been cleared and there is genuinely nothing to show.
-final pinnedLiveOrderIdProvider = StateProvider<String?>((ref) => null);
+final pinnedLiveOrderIdProvider = StateProvider<String?>((ref) {
+  ref.listen(authStateProvider, (previous, next) {
+    final prevUser = previous?.user?.id;
+    final nextUser = next.user?.id;
+    if (prevUser != nextUser) {
+      ref.controller.state = null;
+    }
+  });
+  return null;
+});
 
 /// True once this session's followed order has concluded, which closes adoption
 /// for good.
@@ -49,7 +59,16 @@ final pinnedLiveOrderIdProvider = StateProvider<String?>((ref) => null);
 /// never from inside a resolving provider. Setting it during resolution tripped
 /// Riverpod's guard on the provider's own dependencies: writing the pin marks
 /// this provider outdated, so any second write through the same `ref` throws.
-final liveOrderAdoptionClosedProvider = StateProvider<bool>((ref) => false);
+final liveOrderAdoptionClosedProvider = StateProvider<bool>((ref) {
+  ref.listen(authStateProvider, (previous, next) {
+    final prevUser = previous?.user?.id;
+    final nextUser = next.user?.id;
+    if (prevUser != nextUser) {
+      ref.controller.state = false;
+    }
+  });
+  return false;
+});
 
 /// Picks the one order the bar may adopt, or null if there is nothing worth
 /// adopting.
@@ -232,7 +251,16 @@ void forgetDeletedLiveOrder(WidgetRef ref, String orderId) {
 /// on Thursday. Written from the bar itself, which is the only surface that
 /// knows when it actually painted a terminal state.
 final liveOrderConclusionsProvider =
-    StateProvider<Map<String, LiveOrderConclusion>>((ref) => <String, LiveOrderConclusion>{});
+    StateProvider<Map<String, LiveOrderConclusion>>((ref) {
+  ref.listen(authStateProvider, (previous, next) {
+    final prevUser = previous?.user?.id;
+    final nextUser = next.user?.id;
+    if (prevUser != nextUser) {
+      ref.controller.state = <String, LiveOrderConclusion>{};
+    }
+  });
+  return <String, LiveOrderConclusion>{};
+});
 
 /// Records that [orderId] just reached a terminal state, keeping any dismissal
 /// already recorded for it.

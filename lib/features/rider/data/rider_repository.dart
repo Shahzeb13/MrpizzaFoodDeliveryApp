@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/network/supabase_client.dart';
+import '../../notifications/services/push_notification_sender.dart';
 import '../../orders/data/coalesced_read_gate.dart';
 
 import '../models/rider_delivery.dart';
@@ -13,6 +15,20 @@ import '../models/rider_delivery.dart';
 ///
 /// Same figure the customer order screens use.
 const Duration riderSafetyNetPollInterval = Duration(seconds: 20);
+
+/// How long the panel waits before retrying its very first read.
+///
+/// A read fired at the moment of login can fail once against a session that is
+/// still settling. Without a quick retry the rider stares at a database error
+/// until the 20-second safety-net poll lands, which made a one-off race look
+/// like a broken dashboard.
+const Duration riderFirstReadRetryDelay = Duration(seconds: 2);
+
+/// How many attempts the first read gets before its failure is shown.
+///
+/// Four attempts, two seconds apart, covers a login race while still telling
+/// the rider about a genuinely unreachable backend within about six seconds.
+const int riderFirstReadMaxAttempts = 4;
 
 /// A channel name unique to this rider, so two signed-in riders on the same
 /// socket do not end up sharing a subscription.
@@ -148,6 +164,8 @@ class RiderRepository {
   /// fix for that and need a Firebase project.
   Stream<List<RiderDelivery>> streamDeliveries({
     Duration safetyNetPollInterval = riderSafetyNetPollInterval,
+    Duration firstReadRetryDelay = riderFirstReadRetryDelay,
+    int firstReadMaxAttempts = riderFirstReadMaxAttempts,
   }) {
     final riderId = signedInUserId;
     if (riderId == null) {
@@ -160,12 +178,45 @@ class RiderRepository {
       // rewind the list the rider is looking at.
       final readGate = CoalescedReadGate();
       Timer? safetyNet;
+      Timer? retry;
+      var closed = false;
+
+      // The first read right after login can lose a race with the freshly
+      // issued session: the request goes out before PostgREST accepts the new
+      // token, fails once, and the rider is shown "Could not load your
+      // deliveries" until the 20-second poll happens to succeed. Retrying the
+      // first read quickly means a transient refusal costs a moment, not a
+      // screen full of database error text.
+      var firstReadAttempts = 0;
+
+      // Set once a real list has been shown. After that a failed poll is a
+      // transport hiccup, not a reason to replace the rider's work with an
+      // error — the same rule the customer order streams follow.
+      var hasDeliveredOnce = false;
 
       Future<void> emit() async {
         await readGate.request(() async {
+          if (closed || controller.isClosed) return;
           try {
-            controller.add(await fetchDeliveries());
+            final deliveries = await fetchDeliveries();
+            if (closed || controller.isClosed) return;
+            hasDeliveredOnce = true;
+            firstReadAttempts = 0;
+            controller.add(deliveries);
           } catch (error) {
+            if (closed || controller.isClosed) return;
+
+            // Keep showing the last work list the database actually gave us
+            // rather than blanking the dashboard because one poll failed.
+            if (hasDeliveredOnce) return;
+
+            firstReadAttempts++;
+            if (firstReadAttempts < firstReadMaxAttempts) {
+              retry?.cancel();
+              retry = Timer(firstReadRetryDelay, emit);
+              return;
+            }
+
             controller.addError(error);
           }
         });
@@ -195,7 +246,9 @@ class RiderRepository {
       safetyNet = Timer.periodic(safetyNetPollInterval, (_) => emit());
 
       controller.onCancel = () {
+        closed = true;
         safetyNet?.cancel();
+        retry?.cancel();
         readGate.close();
         final open = channel;
         if (open != null) client.removeChannel(open);
@@ -237,6 +290,7 @@ class RiderRepository {
   ) async {
     try {
       await client.rpc(function, params: params);
+      _notifyOnTransition(function, params);
     } on PostgrestException catch (error) {
       throw RiderRepositoryException(
         error.message.isEmpty
@@ -245,6 +299,75 @@ class RiderRepository {
       );
     }
   }
+
+  void _notifyOnTransition(String function, Map<String, dynamic> params) {
+    // Fire and forget - don't block rider actions
+    Future.microtask(() async {
+      try {
+        final assignmentId = params['p_assignment_id'] as String?;
+        final orderId = params['p_order_id'] as String?;
+        String? customerId;
+
+        if (assignmentId != null) {
+          final row = await client
+              .from('rider_assignments')
+              .select('order_id, orders(customer_id)')
+              .eq('id', assignmentId)
+              .maybeSingle();
+          if (row != null) {
+            final orders = row['orders'];
+            if (orders is Map) {
+              customerId = orders['customer_id'] as String?;
+            }
+            if (customerId == null && orderId == null) {
+              orderIdFromRow(row);
+            }
+          }
+        }
+
+        if (orderId != null && customerId == null) {
+          final row = await client
+              .from('orders')
+              .select('customer_id')
+              .eq('id', orderId)
+              .maybeSingle();
+          customerId = row?['customer_id'] as String?;
+        }
+
+        if (customerId == null) return;
+
+        String title = 'Order Update';
+        String body = 'Your order status has been updated';
+
+        if (function == 'rider_claim_offer') {
+          title = 'Rider Assigned';
+          body = 'A rider has been assigned to your order';
+        } else if (function == 'rider_mark_picked_up') {
+          title = 'Order Picked Up';
+          body = 'Your order is on the way';
+        } else if (function == 'rider_complete_delivery') {
+          title = 'Order Delivered';
+          body = 'Your order has been delivered. Enjoy!';
+        } else if (function == 'rider_fail_delivery') {
+          title = 'Delivery Update';
+          body = 'There was an issue with your delivery. We will contact you soon';
+        }
+
+        await PushNotificationSender.instance.sendToUser(
+          userId: customerId,
+          title: title,
+          body: body,
+          data: {'type': 'order_update', 'function': function},
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('Push notification trigger error: $e');
+        }
+      }
+    });
+  }
+
+  String? orderIdFromRow(Map<String, dynamic> row) => row['order_id'] as String?;
 }
 
 /// The rider's own record, used to tell "not set up yet" from "set up".

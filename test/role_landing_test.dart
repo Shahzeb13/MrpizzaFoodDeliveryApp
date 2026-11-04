@@ -136,13 +136,14 @@ void main() {
       );
     });
 
-    test('a signed-out visitor starts on the login screen', () {
+    test('a signed-out visitor starts on the store front, not the login '
+        'screen', () {
       expect(
         initialLocationForSession(
           isAuthenticated: false,
           role: UserRole.customer,
         ),
-        loginLocation,
+        customerLandingLocation,
       );
     });
   });
