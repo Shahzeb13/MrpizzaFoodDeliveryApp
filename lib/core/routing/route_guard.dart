@@ -86,6 +86,23 @@ const customerOnlyLocations = <String>{
   favoritesLocation,
 };
 
+/// The customer store front: open when signed out, closed to a rider signed
+/// into their own panel. A rider account delivers orders — it has no cart,
+/// no checkout, nothing the storefront builds its screens around — so its
+/// side of the app is the rider panel alone.
+const customerStorefrontLocations = <String>{
+  customerLandingLocation,
+  menuLocation,
+};
+
+/// Everything a signed-in rider is kept out of: the store front and the
+/// commerce screens it serves. One set so the deep-link guard and the login
+/// resume check cannot drift apart.
+const riderClosedLocations = <String>{
+  ...customerStorefrontLocations,
+  ...customerOnlyLocations,
+};
+
 /// Places a login/signup screen may send a user back to after they sign in.
 ///
 /// The `?return=` query parameter came from this app's own redirect, so the
@@ -126,7 +143,7 @@ String? validatedReturnTarget(String? raw) {
 /// login screen. A rider handed back `/checkout` has nowhere in it to go, so
 /// the resume is dropped and they land on the rider panel instead.
 bool returnTargetAllowedForRole(String returnTarget, UserRole role) {
-  if (role == UserRole.rider && customerOnlyLocations.contains(returnTarget)) {
+  if (role == UserRole.rider && riderClosedLocations.contains(returnTarget)) {
     return false;
   }
   if (role != UserRole.rider && riderOnlyLocations.contains(returnTarget)) {
@@ -158,6 +175,16 @@ String? resolveAuthorizedLocation({
   // them there. Staying put is safe — the splash gate covers this window for
   // the user, and the guard runs again when the role lands.
   if (isAuthenticated && isRoleLoading) return null;
+
+  // The store front is public, but only to the visits that have no panel of
+  // their own: a rider signed into their account is kept on their side, so
+  // the storefront screens hand them straight back to the rider panel. This
+  // check runs before the public allow, which reads the storefront as open.
+  if (isAuthenticated &&
+      role == UserRole.rider &&
+      customerStorefrontLocations.contains(requestedLocation)) {
+    return riderLandingLocation;
+  }
 
   if (publicLocations.contains(requestedLocation)) {
     // The store front belongs to everyone, signed in or not: arriving here

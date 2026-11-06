@@ -404,13 +404,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _buildProfileTile(
               icon: Icons.support_agent_outlined,
               title: 'Mr. Pizza Customer Support',
-              subtitle: '24/7 Live chat & helpline',
+              subtitle: 'Helpline, WhatsApp & email',
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content:
-                          Text('Connecting to Mr. Pizza Support...')),
-                );
+                context.push('/support');
               },
             ),
             _buildProfileTile(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/providers/role_provider.dart';
 import '../../../core/routing/route_guard.dart';
 import '../../../core/theme/neumorphic.dart';
 import '../providers/auth_provider.dart';
@@ -330,6 +331,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     _passwordController.text,
                                   );
                               if (!mounted || !success) return;
+                              // go_router's pushed routes never become the
+                              // router's tracked URL, so a refresh-driven
+                              // redirect cannot see a login screen the guard
+                              // pushed open. The resume therefore navigates
+                              // itself, in the same tick the sign-in lands —
+                              // before the session flip has put the whole
+                              // app behind the startup splash. Waiting here
+                              // for the real `profiles.role` was tried and
+                              // broke the checkout resume: this pushed
+                              // screen does not survive that splash swap, so
+                              // an awaited navigation never ran. The
+                              // provisional choice cannot strand anyone: it
+                              // is the same value-or-customer default the
+                              // router itself uses while the role read
+                              // re-runs, and the guard bounces a rider out
+                              // of the storefront and checkout the moment
+                              // the real role arrives — the customer panel
+                              // is never where their journey ends.
+                              final role =
+                                  ref.read(roleProvider).valueOrNull ??
+                                      UserRole.customer;
+                              final destination = resolveAuthorizedLocation(
+                                isAuthenticated: true,
+                                role: role,
+                                requestedLocation: loginLocation,
+                                returnTarget: returnTarget,
+                              );
+                              if (destination != null && context.mounted) {
+                                context.go(destination);
+                              }
                             },
                           ),
                         ),
@@ -372,6 +403,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // A signed-out visitor can still reach the branch numbers,
+                  // WhatsApp and the support email — Apple requires a way to
+                  // contact support before any account exists.
+                  TextButton(
+                    onPressed: () => context.push(supportCenterLocation),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                    ),
+                    child: const Text(
+                      'Need help? Contact support',
+                      style: TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: NeuColors.primary,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 20),
                 ],

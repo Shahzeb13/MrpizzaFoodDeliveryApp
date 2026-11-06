@@ -1,4 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mrpizza/core/providers/role_provider.dart';
 import 'package:mrpizza/core/routing/route_guard.dart';
@@ -176,6 +175,36 @@ void main() {
           ),
           riderLandingLocation,
           reason: '$location is a customer screen',
+        );
+      }
+    });
+
+    test('the customer storefront is closed to a signed-in rider', () {
+      for (final location in customerStorefrontLocations) {
+        expect(
+          resolveAuthorizedLocation(
+            isAuthenticated: true,
+            role: UserRole.rider,
+            requestedLocation: location,
+          ),
+          riderLandingLocation,
+          reason: '$location builds the customer panel a rider does not have',
+        );
+      }
+    });
+
+    test('a rider handed the storefront back as a resume target lands on '
+        'their panel instead', () {
+      for (final location in customerStorefrontLocations) {
+        expect(
+          resolveAuthorizedLocation(
+            isAuthenticated: true,
+            role: UserRole.rider,
+            requestedLocation: loginLocation,
+            returnTarget: location,
+          ),
+          riderLandingLocation,
+          reason: '$location is not a place for a rider to resume from',
         );
       }
     });

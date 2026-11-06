@@ -6,6 +6,7 @@ import 'package:mrpizza/features/rider/data/rider_repository.dart';
 import 'package:mrpizza/features/rider/models/rider_delivery.dart';
 import 'package:mrpizza/features/rider/providers/rider_providers.dart';
 import 'package:mrpizza/features/rider/screens/rider_history_screen.dart';
+import 'package:mrpizza/features/rider/widgets/rider_delivery_history_card.dart';
 
 class _FakeRiderRepository extends RiderRepository {
   _FakeRiderRepository({this.deliveries = const []});
@@ -122,5 +123,59 @@ void main() {
     final first = await container.read(riderHistoryControllerProvider.future);
     expect(first.deliveries, hasLength(2));
     expect(first.hasMore, isFalse);
+  });
+
+  /// The pill must agree with how the job ended. `failed` is what the
+  /// "Report a problem" flow leaves behind — a job the rider could NOT
+  /// deliver, which the database paired by cancelling the order. The pill
+  /// used to fall through to DELIVERED for exactly that status (it only
+  /// grepped the text for 'decline'/'cancel'), so a cancelled order lied
+  /// about being delivered.
+  testWidgets('a problem-reported job shows the declined pill, not delivered',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RiderDeliveryHistoryCard(delivery: _delivery(status: 'failed')),
+        ),
+      ),
+    );
+
+    expect(find.text('DECLINED'), findsOneWidget);
+    expect(find.text('DELIVERED'), findsNothing);
+  });
+
+  testWidgets('a delivered job still shows the delivered pill', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body:
+              RiderDeliveryHistoryCard(delivery: _delivery(status: 'delivered')),
+        ),
+      ),
+    );
+
+    expect(find.text('DELIVERED'), findsOneWidget);
+    expect(find.text('DECLINED'), findsNothing);
+  });
+
+  testWidgets('cancelled and unknown endings are also not deliveries',
+      (tester) async {
+    for (final status in ['cancelled', 'declined', 'unassigned', '']) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body:
+                RiderDeliveryHistoryCard(delivery: _delivery(status: status)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('DELIVERED'), findsNothing,
+          reason: 'status "$status" must not read as delivered');
+      expect(find.text('DECLINED'), findsOneWidget,
+          reason: 'status "$status" must show as not-delivered');
+    }
   });
 }

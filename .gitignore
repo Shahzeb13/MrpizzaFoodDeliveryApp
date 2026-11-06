@@ -47,5 +47,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Build artifacts (APK backups)
+apk_backups/
+*.apk
+
 # superpowers plan workspaces (ledger, briefs, review packages)
 .superpowers/

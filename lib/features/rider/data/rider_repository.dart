@@ -270,6 +270,11 @@ class RiderRepository {
   Future<void> completeDelivery(String assignmentId) => _callTransition(
       'rider_complete_delivery', {'p_assignment_id': assignmentId});
 
+  /// Reports that [assignmentId] could not be delivered, giving [reason].
+  ///
+  /// The report ends the order: the database moves it to `cancelled` — not
+  /// back to the panel's reassignable state — so the branch sees a lost order
+  /// instead of a dead one reviving as "new".
   Future<void> failDelivery(String assignmentId, String reason) =>
       _callTransition('rider_fail_delivery', {
         'p_assignment_id': assignmentId,
@@ -301,6 +306,12 @@ class RiderRepository {
   }
 
   void _notifyOnTransition(String function, Map<String, dynamic> params) {
+    // The database announces a delivery the rider reported as failed itself:
+    // the order lands on `cancelled` and the order-status trigger pushes the
+    // customer a real "Order Cancelled". Sending this one too would arrive as
+    // a second, vaguer notification for the same moment.
+    if (function == 'rider_fail_delivery') return;
+
     // Fire and forget - don't block rider actions
     Future.microtask(() async {
       try {
@@ -348,9 +359,6 @@ class RiderRepository {
         } else if (function == 'rider_complete_delivery') {
           title = 'Order Delivered';
           body = 'Your order has been delivered. Enjoy!';
-        } else if (function == 'rider_fail_delivery') {
-          title = 'Delivery Update';
-          body = 'There was an issue with your delivery. We will contact you soon';
         }
 
         await PushNotificationSender.instance.sendToUser(

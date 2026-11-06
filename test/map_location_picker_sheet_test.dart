@@ -232,4 +232,35 @@ void main() {
     expect(find.text('Block C, Abbottabad'), findsWidgets);
     expect(find.textContaining('34.17120'), findsOneWidget);
   });
+
+  testWidgets('opened on an address, it offers to keep it', (tester) async {
+    await pumpSheet(tester);
+    container.read(locationProvider.notifier).applyMapPick(
+          latitude: 34.1712,
+          longitude: 73.2201,
+          addressText: 'Block C, Abbottabad',
+        );
+    await openSheet(tester);
+
+    expect(find.text('Keep my address and continue'), findsOneWidget);
+
+    await tester.tap(find.text('Keep my address and continue'));
+    await tester.pumpAndSettle();
+
+    // The sheet closed as "confirmed" and the app still holds exactly the
+    // address it was opened on — nothing re-applied over it.
+    expect(find.text('Pick your location'), findsNothing);
+    final location = container.read(locationProvider);
+    expect(location.address, 'Block C, Abbottabad');
+    expect(location.latitude, 34.1712);
+    expect(location.longitude, 73.2201);
+  });
+
+  testWidgets('offers no keep-continue when it opened on nothing',
+      (tester) async {
+    await pumpSheet(tester, saved: const []);
+    await openSheet(tester);
+
+    expect(find.text('Keep my address and continue'), findsNothing);
+  });
 }

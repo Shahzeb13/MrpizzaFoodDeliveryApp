@@ -354,24 +354,32 @@ class CustomerReviewsSection extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          review['tag'] as String,
-                          style: const TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.1,
-                            color: AppColors.textLight,
+                        Flexible(
+                          child: Text(
+                            review['tag'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.1,
+                              color: AppColors.textLight,
+                            ),
                           ),
                         ),
                         const Spacer(),
-                        Text(
-                          review['author'] as String,
-                          style: const TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
+                        Flexible(
+                          child: Text(
+                            review['author'] as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -493,9 +501,9 @@ class PizzaCard extends ConsumerWidget {
                       Container(
                         width: 38,
                         height: 38,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFFF0F3F8),
+                          color: Color(0xFFF0F3F8),
                           boxShadow: const [
                             BoxShadow(
                               color: Colors.white,
@@ -1862,6 +1870,25 @@ class _LocationSelectionDialogState
     if (picked == true) Navigator.pop(context);
   }
 
+  /// Pops with the address the app already holds.
+  ///
+  /// The common case for a second visit: the customer set a spot before, and
+  /// this visit needs no map, GPS or typing at all. Nothing is re-applied —
+  /// the state this dialog was built on is already the applied one — so the
+  /// store below is the only work, and a failure there is ignored exactly
+  /// like every other save in this dialog is.
+  Future<void> _continueWithCurrentAddress() async {
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(saveCurrentLocationProvider)();
+    } catch (_) {
+      // Saving is a convenience on this path; the address they came in with
+      // keeps working even when the store flakes.
+    }
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
   Future<void> _openLocationSettings() async {
     await ref.read(locationProvider.notifier).openAppSettings();
   }
@@ -1938,6 +1965,30 @@ class _LocationSelectionDialogState
                   ),
                 ),
                 const SizedBox(height: 16),
+                // A customer coming back already has an address on file.
+                // Making the first button the "keep it" path means they can
+                // open this dialog, tap once, and be on their way — the map,
+                // GPS and typing stay for the times the address changes.
+                if (location.hasCoordinates ||
+                    location.address.trim().isNotEmpty) ...[
+                  FilledButton.icon(
+                    onPressed: _isLocating || _isSaving
+                        ? null
+                        : _continueWithCurrentAddress,
+                    icon: const Icon(Icons.check_circle_rounded, size: 18),
+                    label: Text(
+                      location.address.trim().isNotEmpty
+                          ? 'Continue with my address'
+                          : 'Continue with my location',
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 SizedBox(
                   width: double.infinity,
                   height: 46,

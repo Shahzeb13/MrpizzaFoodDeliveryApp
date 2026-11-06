@@ -330,6 +330,30 @@ class MyOrdersScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            // Every receipt offers the way out if this specific order went
+            // wrong; the support email it composes names the order.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () =>
+                    context.push('/support', extra: order.billNumber),
+                icon: const Icon(
+                  Icons.support_agent_rounded,
+                  size: 16,
+                  color: NeuColors.primary,
+                ),
+                label: const Text(
+                  'Problem with this order?',
+                  style: TextStyle(
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: NeuColors.primary,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

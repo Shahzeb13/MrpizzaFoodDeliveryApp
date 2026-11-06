@@ -70,6 +70,9 @@ dependencies:
   # in whatever maps app the phone has.
   url_launcher: ^6.3.0
 
+  # The app's own version/build for the "Support" email body.
+  package_info_plus: ^10.2.1
+
   # Policies and FAQs: the terms, privacy, return, refund and FAQ pages that
   # live on mrpizzapak.com are shown in-app rather than copied into Dart, so
   # the published page is always the one the customer agrees to.

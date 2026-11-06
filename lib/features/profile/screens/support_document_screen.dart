@@ -78,6 +78,14 @@ class _SupportDocumentScreenState extends State<SupportDocumentScreen> {
             final uri = Uri.tryParse(request.url);
             if (uri == null) return NavigationDecision.prevent;
 
+            // A WhatsApp invite inside a policy page is a chat, not a page to
+            // read: inside the WebView it can only ever render the "install
+            // WhatsApp" site, so it leaves for the messaging app instead.
+            if (_isExternalChatLink(uri)) {
+              _openExternally(uri);
+              return NavigationDecision.prevent;
+            }
+
             // The policy pages are read inside the app. Anything that is not a
             // web page — a phone number, an email address, a maps link — has to
             // leave for whatever app on the phone handles it, or the WebView
@@ -131,6 +139,20 @@ class _SupportDocumentScreenState extends State<SupportDocumentScreen> {
     }
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+
+  /// True when [uri] is a chat entry that only makes sense outside the WebView:
+  /// the wa.me/whatsapp.com conversation links an FAQ page can carry.
+  static bool _isExternalChatLink(Uri uri) {
+    const chatHosts = <String>{
+      'wa.me',
+      'www.wa.me',
+      'api.whatsapp.com',
+      'www.whatsapp.com',
+      'web.whatsapp.com',
+    };
+    if (!chatHosts.contains(uri.host.toLowerCase())) return false;
+    return uri.scheme == 'http' || uri.scheme == 'https';
   }
 
   Future<void> _openExternally(Uri uri) async {

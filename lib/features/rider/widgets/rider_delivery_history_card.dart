@@ -28,8 +28,20 @@ class _RiderDeliveryHistoryCardState extends State<RiderDeliveryHistoryCard> {
   @override
   Widget build(BuildContext context) {
     final delivery = widget.delivery;
-    final isDeclined = delivery.assignmentStatus.toLowerCase().contains('decline') ||
-        delivery.assignmentStatus.toLowerCase().contains('cancel');
+    // The pill answers one question: did the job END AS A DELIVERY?
+    //
+    // Only `delivered` is a delivery. Everything else this card can receive is
+    // a job that did not complete — `failed` (the rider reported a problem),
+    // `declined` (the offer was refused), `cancelled` (the shop released the
+    // rider), and any status the card does not recognise. This used to grep the
+    // status for 'decline'/'cancel' and fall through to a DELIVERED pill, which
+    // reported every problem-order as a finished delivery — the exact lie the
+    // rider dashboard must never tell.
+    //
+    // The matching lifecycle helpers in delivery_actions.dart agree: the
+    // completed count and the cash-collect button also accept only the literal
+    // `delivered`.
+    final isDeclined = delivery.assignmentStatus != 'delivered';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),

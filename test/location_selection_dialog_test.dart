@@ -509,4 +509,33 @@ void main() {
       expect(container.read(locationProvider).address, isEmpty);
     });
   });
+
+  group('continue with what is already set', () {
+    testWidgets('no continue is offered before anything is set',
+        (tester) async {
+      await pumpDialog(tester, savedAddresses: const []);
+
+      expect(find.textContaining('Continue with my'), findsNothing);
+    });
+
+    testWidgets('continuing closes with the address on file untouched',
+        (tester) async {
+      final container = await pumpDialog(tester, savedAddresses: const []);
+
+      // The state a first visit leaves behind.
+      await container
+          .read(locationProvider.notifier)
+          .setLocation('Al Mansoor Town, Abbottabad');
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Continue with my'), findsOneWidget);
+      await tester.tap(find.textContaining('Continue with my'));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(locationProvider).address,
+        'Al Mansoor Town, Abbottabad',
+      );
+    });
+  });
 }

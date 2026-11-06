@@ -217,7 +217,34 @@ class _OrderTrackingBodyState extends ConsumerState<_OrderTrackingBody> {
             const SizedBox(height: 24),
             _buildHistorySection(context),
           ],
+          const SizedBox(height: 16),
+          _buildSupportAction(context, tracking),
         ],
+      ),
+    );
+  }
+
+  /// The way out when the order itself went wrong. Carries the bill number to
+  /// the support screen, so the email it composes opens with a subject that
+  /// names this exact order instead of a blank "MrPizza support".
+  Widget _buildSupportAction(BuildContext context, OrderTracking tracking) {
+    return Center(
+      child: TextButton.icon(
+        onPressed: () => context.push('/support', extra: tracking.billNumber),
+        icon: const Icon(
+          Icons.support_agent_rounded,
+          size: 18,
+          color: NeuColors.primary,
+        ),
+        label: const Text(
+          'Problem with this order?',
+          style: TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: NeuColors.primary,
+          ),
+        ),
       ),
     );
   }

@@ -133,7 +133,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: supportCenterLocation,
-        builder: (context, state) => const SupportCenterScreen(),
+        // "Problem with this order?" pushes here with the order's bill number
+        // as `extra`, so the support email can carry it in its subject. Any
+        // other extra type is ignored rather than trusted.
+        builder: (context, state) => SupportCenterScreen(
+          orderReference: state.extra is String && (state.extra as String).isNotEmpty
+              ? state.extra as String
+              : null,
+        ),
         routes: [
           // Policies and FAQs live on the website, so this route carries which
           // document to show rather than its URL. Only the documents declared in

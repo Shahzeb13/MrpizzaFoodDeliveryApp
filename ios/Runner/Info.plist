@@ -26,6 +26,15 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Help & Support (and the policy pages' tel:/mailto:/wa.me links):
+	     iOS refuses to hand a URL to these apps unless their schemes are
+	     declared here, and launchUrl then reports "no app instead of nothing" -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>whatsapp</string>
+	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MrPizza uses your location only when you tap "Locate Me" on the delivery map (or "Use Current Location" on the address form), so we can centre the map on you and fill in your delivery address. You can always move the map by hand or type your address instead, and the app works the same without this permission.</string>
 	<key>UIApplicationSceneManifest</key>

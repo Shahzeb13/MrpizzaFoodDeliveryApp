@@ -120,6 +120,11 @@ class _MapLocationPickerSheetState
   bool _isMapReady = false;
   bool _isLocating = false;
   bool _isSaving = false;
+
+  /// True when the sheet was opened on the address the app already holds, so
+  /// a "keep it as it is" exit exists next to the confirm button.
+  bool _openedWithExistingLocation = false;
+
   String? _gpsErrorMessage;
   bool _gpsNeedsSettings = false;
 
@@ -142,6 +147,8 @@ class _MapLocationPickerSheetState
     if (existing.address.trim().isNotEmpty) {
       _landmarkController.text = existing.address.trim();
     }
+    _openedWithExistingLocation =
+        existing.hasCoordinates || existing.address.trim().isNotEmpty;
   }
 
   @override
@@ -360,6 +367,13 @@ class _MapLocationPickerSheetState
     }
 
     if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
+  /// Confirms nothing: the sheet opened on the address the app already holds,
+  /// and this is the "it is fine as it is" exit. Nothing is applied or saved
+  /// on this path — the app state on screen is exactly what is kept.
+  void _keepExistingLocation() {
     Navigator.of(context).pop(true);
   }
 
@@ -746,6 +760,23 @@ class _MapLocationPickerSheetState
               ),
             ),
           ),
+          if (_openedWithExistingLocation)
+            TextButton.icon(
+              onPressed: _isSaving ? null : _keepExistingLocation,
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 17),
+              label: const Text(
+                'Keep my address and continue',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
         ],
       ),
     );
